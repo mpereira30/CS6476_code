@@ -70,13 +70,21 @@ def get_features(image, x, y, feature_width, scales=None):
     x = np.round(x)
     y = np.round(y)
 
+    gaussianKernel = cv2.getGaussianKernel(ksize=5, sigma=half_fw)
+
+    normalized_image_feature = False # else SIFT feature
+
     for i in range(x.shape[0]):
         # extract patch around pixel [y,x]
         y_curr = int(y[i])
         x_curr = int(x[i])
         patch = image[(y_curr - half_fw):(y_curr + half_fw), (x_curr - half_fw):(x_curr + half_fw) ]
-        flat_patch = np.reshape(patch, [1, -1])
-        fv_list.append( flat_patch/np.linalg.norm(flat_patch))
+        if normalized_image_feature:
+            flat_patch = np.reshape(patch, [1, -1])
+            fv_list.append( flat_patch/np.linalg.norm(flat_patch))
+        else:
+
+
     fv = np.concatenate(fv_list, 0)    
     #############################################################################
     #                             END OF YOUR CODE                              #
