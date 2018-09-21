@@ -37,8 +37,8 @@ def match_features(features1, features2, x1, y1, x2, y2):
     #############################################################################
     # TODO: YOUR CODE HERE                                                        #
     #############################################################################
-    threshold = 0.8
     matches_list = []
+    confidences_list = []
     for n in range(features1.shape[0]):
         temp_list = []
         features1_n = features1[n,:]
@@ -47,11 +47,14 @@ def match_features(features1, features2, x1, y1, x2, y2):
         temp_distances = np.asarray(temp_list)
         sorted_indices = np.argsort(temp_distances)
         temp_ratio = temp_distances[sorted_indices[0]]/temp_distances[sorted_indices[1]]
-        if temp_ratio <= threshold:
-            matches_list.append(np.asarray([n,sorted_indices[0]]))
+        matches_list.append(np.asarray([n,sorted_indices[0]]))
+        confidences_list.append(temp_ratio)
 
     matches = np.asarray(matches_list)
-    confidences = None
+    confidences = np.asarray(confidences_list)
+    confidences_indices = np.argsort(confidences)
+    matches = matches[confidences_indices,:]
+    confidences = np.sort(confidences)
     #############################################################################
     #                             END OF YOUR CODE                              #
     #############################################################################
