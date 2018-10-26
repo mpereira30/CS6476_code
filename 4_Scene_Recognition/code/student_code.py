@@ -134,7 +134,7 @@ def build_vocabulary(image_paths, vocab_size):
 
 	for path in image_paths:
 		curr_img = load_image_gray(path)
-		_, descriptors = vlfeat.sift.dsift(curr_img, step=10, fast=True)
+		_, descriptors = vlfeat.sift.dsift(curr_img, step=20, fast=True)
 		# _, descriptors = vlfeat.sift.dsift(curr_img, step=10, fast=False)
 		descriptors = descriptors.astype(np.float32)
 		descriptors_list.append(descriptors)
