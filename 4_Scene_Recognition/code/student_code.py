@@ -135,7 +135,6 @@ def build_vocabulary(image_paths, vocab_size):
 	for path in image_paths:
 		curr_img = load_image_gray(path)
 		_, descriptors = vlfeat.sift.dsift(curr_img, step=20, fast=True)
-		# _, descriptors = vlfeat.sift.dsift(curr_img, step=10, fast=False)
 		descriptors = descriptors.astype(np.float32)
 		descriptors_list.append(descriptors)
 	descriptors_list = np.concatenate(descriptors_list, 0)
@@ -212,7 +211,6 @@ def get_bags_of_sifts(image_paths, vocab_filename):
 	for path in image_paths:
 		curr_img = load_image_gray(path)
 		_, descriptors = vlfeat.sift.dsift(curr_img, step=3, fast=True)
-		# _, descriptors = vlfeat.sift.dsift(curr_img, step=5, fast=False)
 		descriptors = descriptors.astype(np.float32)
 		assignments = vlfeat.kmeans.kmeans_quantize(descriptors, vocab)
 		hist, _ = np.histogram(assignments, bins=np.arange(vocab_size+1), density=True)
