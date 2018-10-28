@@ -225,7 +225,7 @@ def get_bags_of_sifts(image_paths, vocab_filename):
 	#############################################################################
 	feats = np.concatenate(feats, axis=0)	
 	
-	# print("Time taken to construct bag-of-SIFT features:", time() - start_time)
+	print("Time taken to construct bag-of-SIFT features:", time() - start_time)
 
 	return feats
 
@@ -413,5 +413,3 @@ def plot_cross_validation_results_vocab_size():
 	ax2.set_title('Cross-validation results')
 	plt.show()	
 
-def plot_cross_validation_results_lambda():
-	
