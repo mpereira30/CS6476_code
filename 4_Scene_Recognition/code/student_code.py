@@ -134,7 +134,9 @@ def build_vocabulary(image_paths, vocab_size):
 
 	for path in image_paths:
 		curr_img = load_image_gray(path)
-		_, descriptors = vlfeat.sift.dsift(curr_img, step=20, fast=True)
+		# _, descriptors = vlfeat.sift.dsift(curr_img, step=20, fast=True)
+		_, descriptors = vlfeat.sift.dsift(curr_img, step=10, fast=True)
+		
 		descriptors = descriptors.astype(np.float32)
 		descriptors_list.append(descriptors)
 	descriptors_list = np.concatenate(descriptors_list, 0)
@@ -143,7 +145,7 @@ def build_vocabulary(image_paths, vocab_size):
 	#############################################################################
 	#                             END OF YOUR CODE                              #
 	#############################################################################
-	print("Time taken to build vocabulary:", time() - start_time)
+	# print("Time taken to build vocabulary:", time() - start_time)
 
 	return vocab
 
@@ -210,7 +212,9 @@ def get_bags_of_sifts(image_paths, vocab_filename):
 	#############################################################################
 	for path in image_paths:
 		curr_img = load_image_gray(path)
+		# _, descriptors = vlfeat.sift.dsift(curr_img, step=10, fast=True)
 		_, descriptors = vlfeat.sift.dsift(curr_img, step=3, fast=True)
+
 		descriptors = descriptors.astype(np.float32)
 		assignments = vlfeat.kmeans.kmeans_quantize(descriptors, vocab)
 		hist, _ = np.histogram(assignments, bins=np.arange(vocab_size+1), density=True)
@@ -221,7 +225,7 @@ def get_bags_of_sifts(image_paths, vocab_filename):
 	#############################################################################
 	feats = np.concatenate(feats, axis=0)	
 	
-	print("Time taken to construct bag-of-SIFT features:", time() - start_time)
+	# print("Time taken to construct bag-of-SIFT features:", time() - start_time)
 
 	return feats
 
@@ -299,7 +303,7 @@ def get_targets(target_label, labels_list):
 	return np.array(targets), np.array(weights) 
 
 
-def svm_classify(train_image_feats, train_labels, test_image_feats):
+def svm_classify(train_image_feats, train_labels, test_image_feats, lambda_value=970.0):
 	
 	"""
 	This function will train a linear SVM for every category (i.e. one vs all)
@@ -331,8 +335,7 @@ def svm_classify(train_image_feats, train_labels, test_image_feats):
 	categories = list(set(train_labels))
 
 	# construct 1 vs all SVMs for each category
-	lambda_value = 970.0
-	print("lambda:", lambda_value)
+	# print("lambda:", lambda_value)
 	svms = {cat: LinearSVC(random_state=0, tol=1e-5, loss='hinge', C=lambda_value) for cat in categories}
 
 	test_labels = []
@@ -367,3 +370,48 @@ def svm_classify(train_image_feats, train_labels, test_image_feats):
 	#############################################################################
 
 	return test_labels
+
+
+def plot_cross_validation_results_vocab_size():
+
+	cross_val_results_data = np.load('cross_validation_results.npz')
+
+	X    = np.array([10, 20, 50, 100, 150, 200, 400, 600, 1000, 5000, 10000])
+	Y    = cross_val_results_data['means']
+	Yerr = cross_val_results_data['stds']
+
+	f, (ax, ax2, ax3) = plt.subplots(1, 3, sharey=True)
+	ax.errorbar(x=X, y=Y, yerr=Yerr, fmt='--o')
+	ax2.errorbar(x=X, y=Y, yerr=Yerr, fmt='--o')
+	ax3.errorbar(x=X, y=Y, yerr=Yerr, fmt='--o')
+	ax.set_xlim(0,450)
+	ax2.set_xlim(500,1100)
+	ax3.set_xlim(2500,10500)
+	ax.spines['right'].set_visible(False)
+	ax2.spines['left'].set_visible(False)
+	ax2.spines['right'].set_visible(False)
+	ax3.spines['left'].set_visible(False)
+	d = 0.015
+	kwargs = dict(transform=ax.transAxes, color='k', clip_on=False)
+	ax.plot((1 - d, 1 + d), (1 - d, 1 + d), **kwargs) # top-right 
+	ax.plot((1 - d, 1 + d), (-d, +d), **kwargs) # bottom-right
+
+	kwargs.update(transform=ax2.transAxes)  
+	ax2.plot((-d, +d), (1 - d, 1 + d), **kwargs) # top-left
+	ax2.plot((-d, +d), (-d, +d), **kwargs) # bottom-left
+	ax2.plot((1 - d, 1 + d), (1 - d, 1 + d), **kwargs) # top-right 
+	ax2.plot((1 - d, 1 + d), (-d, +d), **kwargs) # bottom-right
+
+	kwargs.update(transform=ax3.transAxes)  
+	ax3.plot((-d, +d), (1 - d, 1 + d), **kwargs) # top-left
+	ax3.plot((-d, +d), (-d, +d), **kwargs) # bottom-left
+
+	ax2.tick_params(left='off')
+	ax3.tick_params(left='off')
+	ax2.set_xlabel('vocabulary size')
+	ax.set_ylabel('accuracy')
+	ax2.set_title('Cross-validation results')
+	plt.show()	
+
+def plot_cross_validation_results_lambda():
+	
