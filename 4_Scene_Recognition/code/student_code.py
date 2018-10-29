@@ -9,7 +9,7 @@ from IPython.core.debugger import set_trace
 from time import time 
 import matplotlib.pyplot as plt
 
-def get_tiny_images(image_paths):
+def get_tiny_images(image_paths, standardize_pixels=False, unit_norm=False):
 	"""
 	This feature is inspired by the simple tiny images used as features in
 	80 million tiny images: a large dataset for non-parametric object and
@@ -37,30 +37,33 @@ def get_tiny_images(image_paths):
 	"""
 	# dummy feats variable
 	feats = []
-	standardize_pixels 	= True
-	unit_norm			= False
 
-	if standardize_pixels:
-		print("Standardizing pixels")
-	elif unit_norm:
-		print("Transforming pixels to zero mean and unit length")
 	#############################################################################
 	# TODO: YOUR CODE HERE                                                      #
 	#############################################################################
-
+	i = 0
 	for path in image_paths:
 		curr_img 	= load_image_gray(path)
-		curr_img 	= cv2.resize(curr_img,(16, 16), interpolation=cv2.INTER_AREA)
+		# curr_img 	= cv2.resize(curr_img,(16, 16), interpolation=cv2.INTER_AREA)
+		curr_img 	= cv2.resize(curr_img,(16, 16) )
+
 		pixels_vec	= curr_img.flatten()
 
 		if standardize_pixels:
+			if i==0:
+				print("Standardizing")
+				i+=1
 			pixels_mean = np.mean(pixels_vec)
 			pixels_std 	= np.std(pixels_vec)
 			pixels_vec 	= (pixels_vec - pixels_mean)/pixels_std 
 		elif unit_norm:
 			pixels_mean = np.mean(pixels_vec)
 			pixels_norm = np.linalg.norm(pixels_vec)
-			pixels_vec 	= (pixels_vec - pixels_mean)/pixels_norm 
+			pixels_vec 	= (pixels_vec - pixels_mean)/pixels_norm
+		else:
+			if i==0:
+				print("Using raw pixel intensities")
+				i+=1			
 
 		feats.append(np.expand_dims(pixels_vec, 0))
 
@@ -213,7 +216,7 @@ def get_bags_of_sifts(image_paths, vocab_filename):
 	for path in image_paths:
 		curr_img = load_image_gray(path)
 		# _, descriptors = vlfeat.sift.dsift(curr_img, step=10, fast=True)
-		_, descriptors = vlfeat.sift.dsift(curr_img, step=3, fast=True)
+		_, descriptors = vlfeat.sift.dsift(curr_img, step=5, fast=True)
 
 		descriptors = descriptors.astype(np.float32)
 		assignments = vlfeat.kmeans.kmeans_quantize(descriptors, vocab)
@@ -230,7 +233,7 @@ def get_bags_of_sifts(image_paths, vocab_filename):
 	return feats
 
 def nearest_neighbor_classify(train_image_feats, train_labels, test_image_feats,
-    metric='euclidean'):
+    metric='euclidean', perform_kNN=False, k=1):
 	"""
 	This function will predict the category for every test image by finding
 	the training image with most similar features. Instead of 1 nearest
@@ -265,21 +268,26 @@ def nearest_neighbor_classify(train_image_feats, train_labels, test_image_feats,
 	      predicted category for each testing image
 	"""
 	test_labels = []
-	perform_kNN = True
 	#############################################################################
 	# TODO: YOUR CODE HERE                                                      #
 	#############################################################################
-	k = 18
 	D = sklearn_pairwise.pairwise_distances(test_image_feats, train_image_feats)
 
 	if perform_kNN:
-		train_labels = np.array(train_labels)
+		train_labels_array = np.array(train_labels)
 		for i in range(D.shape[0]):
-			sorted_indices 			= np.argsort(D[i,:])[:k]
-			nearest_labels 			= train_labels[sorted_indices]
-			unique_labels, counts 	= np.unique(nearest_labels, return_counts=True)
-			max_count_index			= np.argmax(counts)
-			test_labels.append(unique_labels[max_count_index])
+			sorted_indices 						= np.argsort(D[i,:])[:k]
+			nearest_labels 						= train_labels_array[sorted_indices]
+			unique_labels, l_indices, counts 	= np.unique(nearest_labels, return_index=True, return_counts=True)
+			max_count_indicies      			= np.argwhere(counts == np.amax(counts))
+			
+			if max_count_indicies.shape[0] > 1:
+				smaller_distance_array	= D[i,sorted_indices[l_indices[max_count_indicies]]]
+				min_dist_indx		  	= np.argmin(smaller_distance_array)
+				min_indx  				= sorted_indices[l_indices[max_count_indicies]][min_dist_indx]
+				test_labels.append(train_labels[min_indx[0]])
+			else:
+				test_labels.append(unique_labels[np.argmax(counts)])
 
 	else:
 		for i in range(D.shape[0]):
