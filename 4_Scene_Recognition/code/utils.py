@@ -43,7 +43,7 @@ def get_image_paths(data_path, categories, num_train_per_cat=100, fmt='jpg'):
     # train
     pth = osp.join(data_path, 'train', cat, '*.{:s}'.format(fmt))
     pth = glob(pth)
-    shuffle(pth)
+    # shuffle(pth)
     pth = pth[:num_train_per_cat]
     train_image_paths.extend(pth)
     train_labels.extend([cat]*len(pth))
@@ -51,7 +51,7 @@ def get_image_paths(data_path, categories, num_train_per_cat=100, fmt='jpg'):
     # test
     pth = osp.join(data_path, 'test', cat, '*.{:s}'.format(fmt))
     pth = glob(pth)
-    shuffle(pth)
+    # shuffle(pth)
     pth = pth[:num_train_per_cat]
     test_image_paths.extend(pth)
     test_labels.extend([cat]*len(pth))

@@ -44,8 +44,8 @@ def get_tiny_images(image_paths, standardize_pixels=False, unit_norm=False):
 	i = 0
 	for path in image_paths:
 		curr_img 	= load_image_gray(path)
-		# curr_img 	= cv2.resize(curr_img,(16, 16), interpolation=cv2.INTER_AREA)
-		curr_img 	= cv2.resize(curr_img,(16, 16) )
+		curr_img 	= cv2.resize(curr_img,(16, 16), interpolation=cv2.INTER_AREA)
+		# curr_img 	= cv2.resize(curr_img,(16, 16) )
 
 		pixels_vec	= curr_img.flatten()
 
