@@ -8,6 +8,10 @@ from sklearn.svm import LinearSVC
 from IPython.core.debugger import set_trace
 from time import time 
 import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+import os.path as osp
+from utils import *
+import sys
 
 def get_tiny_images(image_paths, standardize_pixels=False, unit_norm=False):
 	"""
@@ -45,24 +49,27 @@ def get_tiny_images(image_paths, standardize_pixels=False, unit_norm=False):
 	for path in image_paths:
 		curr_img 	= load_image_gray(path)
 		curr_img 	= cv2.resize(curr_img,(16, 16), interpolation=cv2.INTER_AREA)
-		# curr_img 	= cv2.resize(curr_img,(16, 16) )
 
 		pixels_vec	= curr_img.flatten()
 
 		if standardize_pixels:
 			if i==0:
-				print("Standardizing")
+				print("applying standardization transform")
 				i+=1
 			pixels_mean = np.mean(pixels_vec)
 			pixels_std 	= np.std(pixels_vec)
 			pixels_vec 	= (pixels_vec - pixels_mean)/pixels_std 
 		elif unit_norm:
+			if i==0:
+				print("applying unit norm transform")
+				i+=1			
 			pixels_mean = np.mean(pixels_vec)
+			pixels_vec 	= (pixels_vec - pixels_mean)
 			pixels_norm = np.linalg.norm(pixels_vec)
-			pixels_vec 	= (pixels_vec - pixels_mean)/pixels_norm
+			pixels_vec  = pixels_vec/pixels_norm
 		else:
 			if i==0:
-				print("Using raw pixel intensities")
+				print("using un-transformed pixel intensities")
 				i+=1			
 
 		feats.append(np.expand_dims(pixels_vec, 0))
@@ -137,7 +144,6 @@ def build_vocabulary(image_paths, vocab_size):
 
 	for path in image_paths:
 		curr_img = load_image_gray(path)
-		# _, descriptors = vlfeat.sift.dsift(curr_img, step=20, fast=True)
 		_, descriptors = vlfeat.sift.dsift(curr_img, step=10, fast=True)
 		
 		descriptors = descriptors.astype(np.float32)
@@ -215,7 +221,6 @@ def get_bags_of_sifts(image_paths, vocab_filename):
 	#############################################################################
 	for path in image_paths:
 		curr_img = load_image_gray(path)
-		# _, descriptors = vlfeat.sift.dsift(curr_img, step=10, fast=True)
 		_, descriptors = vlfeat.sift.dsift(curr_img, step=5, fast=True)
 
 		descriptors = descriptors.astype(np.float32)
@@ -311,7 +316,7 @@ def get_targets(target_label, labels_list):
 	return np.array(targets), np.array(weights) 
 
 
-def svm_classify(train_image_feats, train_labels, test_image_feats, lambda_value=970.0):
+def svm_classify(train_image_feats, train_labels, test_image_feats, lambda_value=591.0):
 	
 	"""
 	This function will train a linear SVM for every category (i.e. one vs all)
@@ -362,11 +367,7 @@ def svm_classify(train_image_feats, train_labels, test_image_feats, lambda_value
 		svms[cat_].fit(train_image_feats, y, sample_weight=w_s)
 		W_mat.append(svms[cat_].coef_)
 		b_vec.append(svms[cat_].intercept_)
-		predictions.append(np.expand_dims(svms[cat_].decision_function(test_image_feats), -1))
-
-	# predictions = np.concatenate(predictions, axis=-1)
-	# predicted_indices = np.argmax(predictions, axis=-1)	
-	# test_labels = [categories[index] for index in predicted_indices]
+		# predictions.append(np.expand_dims(svms[cat_].decision_function(test_image_feats), -1))
 
 	W_mat = np.concatenate(W_mat, 0)
 	b_vec = np.expand_dims(np.concatenate(b_vec, -1),-1)
@@ -380,6 +381,145 @@ def svm_classify(train_image_feats, train_labels, test_image_feats, lambda_value
 	return test_labels
 
 
+def cross_validation_vocab(categories, iters_per_param_value, candidate_vocab_sizes, candidate_lambda_values, train_percentage):
+
+	num_train_per_cat_cross_val = 25
+	data_path = osp.join('..', 'data')
+	train_image_paths_cross_val, _, train_labels_cross_val, _ = get_image_paths(data_path, \
+	                                                                  categories, num_train_per_cat_cross_val);
+
+	num_training_images      =  len(train_image_paths_cross_val)
+	num_training_split       =  int(train_percentage*num_training_images)
+
+	np_paths_array           =  np.array(train_image_paths_cross_val) # for being able to randomly access indices
+	np_labels_array          =  np.array(train_labels_cross_val)
+	cat2idx                  =  {cat: idx for idx, cat in enumerate(categories)}
+
+	mean_acc_list          = [] # for plotting error bars
+	std_acc_list           = [] # for plotting error bars
+	best_cand_lambdas_list = []
+
+	for i in range(len(candidate_vocab_sizes)):
+	    accuracy_list = [] # store accuracy values to compute mean and std acc over iterations 
+	    lambdas_vote = np.zeros((len(candidate_lambda_values),1))
+	    print("trying candidate vocab size:",candidate_vocab_sizes[i])
+	    for j in range(iters_per_param_value):
+	        
+	        # Generate random indices for training images:
+	        rnd_indxs = np.random.choice(num_training_images, num_training_images, replace=False)
+	        
+	        # Depending on train/validation percentage split, separate training and validation images:
+	        train_image_paths_split       =  np_paths_array[rnd_indxs[:num_training_split]]
+	        validation_image_paths_split  =  np_paths_array[rnd_indxs[num_training_split:]]
+	        train_labels_split            =  np_labels_array[rnd_indxs[:num_training_split]]
+	        validation_labels_split       =  np_labels_array[rnd_indxs[num_training_split:]]
+	        
+	        # Create vocabulary for current train/validation split:
+	        vocab_filename = 'cross_validation_data/vocab_' + \
+	                         str(candidate_vocab_sizes[i]) + '_iter_' + str(j+1) + '.pkl'
+	        if not osp.isfile(vocab_filename):
+	            vocab = build_vocabulary(train_image_paths_split, candidate_vocab_sizes[i])
+	            with open(vocab_filename, 'wb') as f:
+	                pickle.dump(vocab, f)
+
+	        # Use the generated vocabulary to extract bags-of-sift features from train & validation images:
+	        train_features        =  get_bags_of_sifts(train_image_paths_split, vocab_filename)
+	        validation_features   =  get_bags_of_sifts(validation_image_paths_split, vocab_filename)  
+	        
+	        y_true                =  [cat2idx[cat] for cat in validation_labels_split]
+	        
+	        # for current vocabulary size test possible candidate lambdas:
+	        testing_lambdas_list  =  []
+	        for k in range(len(candidate_lambda_values)):
+	            predicted_categories  =  svm_classify(train_features, train_labels_split, \
+	                                                     validation_features, lambda_value=candidate_lambda_values[k])
+	        
+	            # Create a confusion matrix, compute accuracy and store in a list:
+	            y_pred  =  [cat2idx[cat] for cat in predicted_categories]
+	            cm      =  confusion_matrix(y_true, y_pred)
+	            cm      =  cm.astype(np.float) / cm.sum(axis=1)[:, np.newaxis]
+	            acc     =  np.mean(np.diag(cm))
+	            testing_lambdas_list.append(acc)
+	        best_lambda_indx = np.argmax(np.array(testing_lambdas_list))
+	        lambdas_vote[best_lambda_indx,0] += 1
+	        
+	        accuracy_list.append(testing_lambdas_list[best_lambda_indx]) # Store accuracy corresponding to best lambda
+	        print("Iteration:", j+1, "best acc:", accuracy_list[-1],\
+	              "best lambda:", candidate_lambda_values[best_lambda_indx])
+	        
+	    acc_list_array = np.array(accuracy_list)    
+	    mean_acc_list.append(np.mean(acc_list_array))
+	    std_acc_list.append(np.std(acc_list_array))
+	        
+	    highest_voted_lambda_indx = np.argmax(lambdas_vote[:,0])
+	    best_cand_lambdas_list.append(candidate_lambda_values[highest_voted_lambda_indx])
+	    
+	    print("Stats: mean acc = ", mean_acc_list[-1], "std acc = ", std_acc_list[-1], \
+	          "highest voted lambda = ", best_cand_lambdas_list[-1])
+
+	cross_val_means   = np.array(mean_acc_list)
+	cross_val_stds    = np.array(std_acc_list)
+	cross_val_lambdas = np.array(best_cand_lambdas_list) 
+	np.savez('cross_validation_results', means=cross_val_means, stds=cross_val_stds, lambdas=cross_val_lambdas)	
+
+
+def cross_validation_lambda(categories, candidate_lambda_values, train_labels, iters, train_split, train_image_feats):
+	
+	train_labels_array            =  np.array(train_labels)
+
+	total_images                  =  train_image_feats.shape[0]
+	num_train_images_split        =  int(train_split*total_images)
+	cat2idx                       =  {cat: idx for idx, cat in enumerate(categories)}
+
+	mean_acc_list          = [] # for plotting error bars
+	std_acc_list           = [] # for plotting error bars
+
+	for i in range(candidate_lambda_values.shape[0]):
+	    temp_acc_list=[]
+	    for j in range(iters):
+	        rnd_indxs                     =  np.random.choice(total_images, total_images, replace=False)
+	        train_image_feats_split       =  train_image_feats[rnd_indxs[:num_train_images_split], :]
+	        validation_image_feats_split  =  train_image_feats[rnd_indxs[num_train_images_split:], :]
+	        train_labels_split            =  train_labels_array[rnd_indxs[:num_train_images_split]]
+	        validation_labels_split       =  train_labels_array[rnd_indxs[num_train_images_split:]]
+	    
+	        y_true                        =  [cat2idx[cat] for cat in validation_labels_split]
+	        predicted_categories          =  svm_classify(train_image_feats_split, train_labels_split, \
+	                                           validation_image_feats_split, \
+	                                           lambda_value=candidate_lambda_values[i])
+	        
+	        # build confusion matrix and compute prediction accuracy on validation data:
+	        y_pred  =  [cat2idx[cat] for cat in predicted_categories]
+	        cm      =  confusion_matrix(y_true, y_pred)
+	        cm      =  cm.astype(np.float) / cm.sum(axis=1)[:, np.newaxis]
+	        acc     =  np.mean(np.diag(cm))
+	        temp_acc_list.append(acc)
+	        sys.stdout.write("trial:%d/%d, lambda:%f, iter:%d, acc:%f\r" % (i+1, candidate_lambda_values.shape[0], \
+	                                                             candidate_lambda_values[i], j+1, temp_acc_list[-1]))
+	        sys.stdout.flush()
+	    mean_acc_list.append(np.mean(np.array(temp_acc_list)))
+	    std_acc_list.append(np.std(np.array(temp_acc_list)))
+	    
+	cross_val_lambda_means = np.array(mean_acc_list)
+	cross_val_lambda_stds  = np.array(std_acc_list)
+	np.savez('cross_validation_lambda_results', means=cross_val_lambda_means, stds=cross_val_lambda_stds)
+
+
+def plot_cross_validation_results_lambda(candidate_lambda_values):
+
+	cross_val_results_data = np.load('cross_validation_lambda_results.npz')
+
+	X    = candidate_lambda_values
+	Y    = cross_val_results_data['means']
+	Yerr = cross_val_results_data['stds']
+
+	print("Highest mean acc:",Y[np.argmax(Y)],"for lambda:", X[np.argmax(Y)])
+
+	plt.figure()
+	plt.errorbar(X,Y,Yerr)
+	plt.xlabel('lambda')
+	plt.ylabel('accuracy')
+
 def plot_cross_validation_results_vocab_size():
 
 	cross_val_results_data = np.load('cross_validation_results.npz')
@@ -387,6 +527,8 @@ def plot_cross_validation_results_vocab_size():
 	X    = np.array([10, 20, 50, 100, 150, 200, 400, 600, 1000, 5000, 10000])
 	Y    = cross_val_results_data['means']
 	Yerr = cross_val_results_data['stds']
+
+	print("Highest accuracy:", np.amax(Y), "for vocabulary size of ", X[np.argmax(Y)])
 
 	f, (ax, ax2, ax3) = plt.subplots(1, 3, sharey=True)
 	ax.errorbar(x=X, y=Y, yerr=Yerr, fmt='--o')
@@ -421,3 +563,27 @@ def plot_cross_validation_results_vocab_size():
 	ax2.set_title('Cross-validation results')
 	plt.show()	
 
+def monte_carlo_testing(categories, vocab_filename, num_trials, num_train_per_cat, best_lambda_value):
+
+	cat2idx        =  {cat: idx for idx, cat in enumerate(categories)}
+	accuracy_list  = []
+	data_path = osp.join('..', 'data')
+
+	for i in range(num_trials):
+	    train_image_paths, test_image_paths, train_labels, test_labels = get_image_paths(data_path,
+	                                                                                 categories,
+	                                                                                 num_train_per_cat);
+	    train_image_feats       =  get_bags_of_sifts(train_image_paths, vocab_filename)
+	    test_image_feats        =  get_bags_of_sifts(test_image_paths, vocab_filename)
+	    predicted_categories    =  svm_classify(train_image_feats, train_labels, test_image_feats, lambda_value=best_lambda_value)
+	    
+	    y_true  =  [cat2idx[cat] for cat in test_labels]
+	    y_pred  =  [cat2idx[cat] for cat in predicted_categories]
+	    cm      =  confusion_matrix(y_true, y_pred)
+	    cm      =  cm.astype(np.float) / cm.sum(axis=1)[:, np.newaxis]
+	    acc     =  np.mean(np.diag(cm))    
+	    accuracy_list.append(acc)
+	    sys.stdout.write("trial:%d/%d, acc:%f\r" % (i+1, num_trials, acc))
+	    sys.stdout.flush()
+
+	print("Statistics: Mean=", np.mean(np.array(accuracy_list)), " Std:", np.std(np.array(accuracy_list)))
