@@ -102,46 +102,46 @@ def get_random_negative_features(non_face_scn_path, feature_params, num_samples)
 	###########################################################################
 	#                           TODO: YOUR CODE HERE                          #
 	###########################################################################
-	use_downsampled_images = False
+	return_all 	= False
+	scales 		= [1.0, 0.8, 0.7, 0.6, 0.5]
+	
 	#---------------- Starter code --------------------------------------------
 	# n_cell = np.ceil(win_size/cell_size).astype('int')
 	# feats = np.random.rand(len(negative_files), n_cell*n_cell*31)
 	#--------------------------------------------------------------------------
 
-	feats_list 				 = []
-	downsampled_feats_list 	 = []
+	feats_list = []
 	for current_image in negative_files:
-		img 				 = load_image_gray(current_image)
-		temp_feat 			 = vlfeat.hog.hog(img, cell_size)
-		row_steps, col_steps = temp_feat.shape[0]//cell_size, temp_feat.shape[1]//cell_size
+		img = load_image_gray(current_image)
 
-		# extract features at original scale for current image:
-		for r in range(row_steps):
-			row_index = r * cell_size
-			for c in range(col_steps):
-				col_index = c * cell_size
-				feats_list.append( np.expand_dims(temp_feat[row_index:row_index+cell_size, col_index:col_index+cell_size].flatten(), axis=0) )
+		for scale_factor in scales:
+		
+			sc_r = int(scale_factor * img.shape[0])
+			sc_c = int(scale_factor * img.shape[1])
 
-		# extract features at training images scale (36 x 36) for the current image:
-		# if use_downsampled_images:
-		# 	downscaled_img 		= cv2.resize(img,(36, 36), interpolation=cv2.INTER_AREA)
-		# 	temp_feat 			= np.expand_dims(vlfeat.hog.hog(downscaled_img, cell_size).flatten(), axis=0)
-		# 	downsampled_feats_list.append( temp_feat )
+			if sc_r < 36:
+				sc_r = 36
+			if sc_c < 36:
+				sc_c = 36
 
-	# if use_downsampled_images:		
-	# 	feats_all 				= np.concatenate(feats_list, axis=0)
-	# 	downsampled_feats_all 	= np.concatenate(downsampled_feats_list, axis=0)
-	# 	# print(feats_all.shape)
-	# 	rand_indxs = np.random.choice(feats_all.shape[0], num_samples - len(negative_files), replace=False)
-	# 	feats = feats_all[rand_indxs,:]
-	# 	feats = np.concatenate((feats, downsampled_feats_all), axis=0)
-	# else:
+			scaled_im = cv2.resize(img, (sc_c, sc_r), interpolation=cv2.INTER_AREA)
+			temp_feat = vlfeat.hog.hog(scaled_im, cell_size)
+			row_steps, col_steps = temp_feat.shape[0]//cell_size, temp_feat.shape[1]//cell_size
 
-	feats_all  	= np.concatenate(feats_list, axis=0)
-	rand_indxs 	= np.random.choice(feats_all.shape[0], num_samples, replace=False)
-	feats 		= feats_all[rand_indxs,:]
+			# extract features at original scale for current image:
+			for r in range(row_steps):
+				row_index = r * cell_size
+				for c in range(col_steps):
+					col_index = c * cell_size
+					feats_list.append( np.expand_dims(temp_feat[row_index:row_index+cell_size, col_index:col_index+cell_size].flatten(), axis=0) )
+
+	feats_all = np.concatenate(feats_list, axis=0)
+	if return_all:
+		rand_indxs = np.random.choice(feats_all.shape[0], feats_all.shape[0], replace=False)
+	else:
+		rand_indxs = np.random.choice(feats_all.shape[0], num_samples, replace=False)
+	feats = feats_all[rand_indxs,:]
 			
-	# print(feats.shape)
 	print("Finished extracting negative HoG features. Shape:", feats.shape)
 	
 	###########################################################################
@@ -184,48 +184,83 @@ def train_classifier(features_pos, features_neg, C):
 
     return svm
 
-def mine_hard_negs(non_face_scn_path, svm, feature_params):
-    """
-    This function is pretty similar to get_random_negative_features(). The only
-    difference is that instead of returning all the extracted features, you only
-    return the features with false-positive prediction.
+def mine_hard_negs(non_face_scn_path, svm, feature_params, conf_thres=-1.0):
+	"""
+	This function is pretty similar to get_random_negative_features(). The only
+	difference is that instead of returning all the extracted features, you only
+	return the features with false-positive prediction.
 
-    Useful functions:
-    -   vlfeat.hog.hog(im, cell_size): computes HoG features
-    -   svm.predict(feat): predict features
+	Useful functions:
+	-   vlfeat.hog.hog(im, cell_size): computes HoG features
+	-   svm.predict(feat): predict features
 
-    Args:
-    -   non_face_scn_path: string. This directory contains many images which
-            have no faces in them.
-    -   feature_params: dictionary of HoG feature computation parameters. See
-            the documentation for get_positive_features() for more information.
-    -   svm: LinearSVC object
+	Args:
+	-   non_face_scn_path: string. This directory contains many images which
+	        have no faces in them.
+	-   feature_params: dictionary of HoG feature computation parameters. See
+	        the documentation for get_positive_features() for more information.
+	-   svm: LinearSVC object
 
-    Returns:
-    -   N x D matrix where N is the number of non-faces which are
-            false-positive and D is the feature dimensionality.
-    """
+	Returns:
+	-   N x D matrix where N is the number of non-faces which are
+	        false-positive and D is the feature dimensionality.
+	"""
 
-    # params for HOG computation
-    win_size = feature_params.get('template_size', 36)
-    cell_size = feature_params.get('hog_cell_size', 6)
+	# params for HOG computation
+	win_size = feature_params.get('template_size', 36)
+	cell_size = feature_params.get('hog_cell_size', 6)
 
-    negative_files = glob(osp.join(non_face_scn_path, '*.jpg'))
+	negative_files = glob(osp.join(non_face_scn_path, '*.jpg'))
 
-    ###########################################################################
-    #                           TODO: YOUR CODE HERE                          #
-    ###########################################################################
+	###########################################################################
+	#                           TODO: YOUR CODE HERE                          #
+	###########################################################################
+	
+	W = svm.coef_ # (1, 1116)
+	b = svm.intercept_ # (1,)
+	scales = [1.0, 0.8, 0.7, 0.6, 0.5]
+	
+	#---------------- Starter code --------------------------------------------
+	# n_cell = np.ceil(win_size/cell_size).astype('int')
+	# feats = np.random.rand(len(negative_files), n_cell*n_cell*31)
+	#--------------------------------------------------------------------------
+	feats_list = []
+	for current_image in negative_files:
+		img = load_image_gray(current_image)
 
-    n_cell = np.ceil(win_size/cell_size).astype('int')
-    feats = np.random.rand(len(negative_files), n_cell*n_cell*31)
-    
-    ###########################################################################
-    #                             END OF YOUR CODE                            #
-    ###########################################################################
+		for scale_factor in scales:
+		
+			sc_r = int(scale_factor * img.shape[0])
+			sc_c = int(scale_factor * img.shape[1])
 
-    return feats
+			if sc_r < 36:
+				sc_r = 36
+			if sc_c < 36:
+				sc_c = 36
 
-def run_detector(test_scn_path, svm, feature_params, verbose=False):
+			scaled_im = cv2.resize(img, (sc_c, sc_r), interpolation=cv2.INTER_AREA)
+			temp_feat = vlfeat.hog.hog(scaled_im, cell_size)
+			row_steps, col_steps = temp_feat.shape[0]//cell_size, temp_feat.shape[1]//cell_size
+
+			# extract features at original scale for current image:
+			for r in range(row_steps):
+				row_index = r * cell_size
+				for c in range(col_steps):
+					col_index = c * cell_size
+					curr_window_feat = np.expand_dims(temp_feat[row_index:row_index+cell_size, col_index:col_index+cell_size].flatten(), axis=-1)
+					pred_conf = W.dot(curr_window_feat) + b
+					if pred_conf >= conf_thres:
+						feats_list.append(curr_window_feat)
+
+	feats = np.concatenate(feats_list, axis=-1).T
+	print(feats.shape)
+	###########################################################################
+	#                             END OF YOUR CODE                            #
+	###########################################################################
+
+	return feats
+
+def run_detector(test_scn_path, svm, feature_params, verbose=False, conf_thres=-1.0):
 	"""
 	This function returns detections on all of the images in a given path. You
 	will want to use non-maximum suppression on your detections or your
@@ -287,7 +322,6 @@ def run_detector(test_scn_path, svm, feature_params, verbose=False):
 
 	W = svm.coef_ # (1, 1116)
 	b = svm.intercept_ # (1,)
-	conf_thres = -1.0
 
 	for idx, im_filename in enumerate(im_filenames):
 		print('Detecting faces in {:s}'.format(im_filename))
