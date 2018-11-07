@@ -11,17 +11,17 @@ from time import time
 # scales = [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3]
 # scales = [1.0, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65]
 # scales = [1.0, 0.9, 0.8, 0.7, 0.6]
-scales = [0.8, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]
-# scales = [1.0, 0.7, 0.6]
+# scales = [0.8, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]
+scales = [1.0, 0.7, 0.6]
 # scales = [1.0]
 
-# detection_scales = [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4]
-# detection_scales = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]
-detection_scales = [0.8, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]
+# detection_scal .0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4]
+detection_scales = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]
+# detection_scales = [0.8, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]
 
 return_all 			= False
-step_size 			= 15
-detect_step_size 	= 15
+step_size 			= 10
+detect_step_size 	= 10
 pos_ws				= 1.0
 
 def get_positive_features(train_path_pos, feature_params):
@@ -285,8 +285,17 @@ def mine_hard_negs(non_face_scn_path, svm, feature_params, conf_thres=-1.0):
 							feats_list.append(curr_window_feat)
 
 	feats = np.concatenate(feats_list, axis=-1).T
-	print(feats.shape)
+	print("features before resampling",feats.shape)
 	print("Time taken:", time() - starting_time)
+	
+	if feats.shape[0]>10000:
+		rand_indxs = np.random.choice(feats.shape[0], 10000, replace=False)
+	else:
+		rand_indxs = np.random.choice(feats.shape[0], feats.shape[0], replace=False)
+
+	feats = feats[rand_indxs,:]
+	print("features after resampling",feats.shape)
+
 	###########################################################################
 	#                             END OF YOUR CODE                            #
 	###########################################################################
