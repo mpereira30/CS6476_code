@@ -6,7 +6,23 @@ from glob import glob
 from random import shuffle
 from IPython.core.debugger import set_trace
 from sklearn.svm import LinearSVC
+from time import time
 
+# scales = [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3]
+# scales = [1.0, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65]
+# scales = [1.0, 0.9, 0.8, 0.7, 0.6]
+scales = [0.8, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]
+# scales = [1.0, 0.7, 0.6]
+# scales = [1.0]
+
+# detection_scales = [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4]
+# detection_scales = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]
+detection_scales = [0.8, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]
+
+return_all 			= False
+step_size 			= 15
+detect_step_size 	= 15
+pos_ws				= 1.0
 
 def get_positive_features(train_path_pos, feature_params):
 	"""
@@ -102,13 +118,18 @@ def get_random_negative_features(non_face_scn_path, feature_params, num_samples)
 	###########################################################################
 	#                           TODO: YOUR CODE HERE                          #
 	###########################################################################
-	return_all 	= False
-	scales 		= [1.0, 0.8, 0.7, 0.6, 0.5]
 	
 	#---------------- Starter code --------------------------------------------
 	# n_cell = np.ceil(win_size/cell_size).astype('int')
 	# feats = np.random.rand(len(negative_files), n_cell*n_cell*31)
 	#--------------------------------------------------------------------------
+
+	starting_time = time()
+	print("using a step size of:", step_size)
+	if len(scales) > 1:
+		print("Using multiple scales for negative feature extraction. Scales are:", scales)
+	else:
+		print("Using single scale ... ")
 
 	feats_list = []
 	for current_image in negative_files:
@@ -119,21 +140,21 @@ def get_random_negative_features(non_face_scn_path, feature_params, num_samples)
 			sc_r = int(scale_factor * img.shape[0])
 			sc_c = int(scale_factor * img.shape[1])
 
-			if sc_r < 36:
+			if sc_r < 36 or sc_c < 36:
 				sc_r = 36
-			if sc_c < 36:
 				sc_c = 36
-
-			scaled_im = cv2.resize(img, (sc_c, sc_r), interpolation=cv2.INTER_AREA)
-			temp_feat = vlfeat.hog.hog(scaled_im, cell_size)
-			row_steps, col_steps = temp_feat.shape[0]//cell_size, temp_feat.shape[1]//cell_size
-
-			# extract features at original scale for current image:
-			for r in range(row_steps):
-				row_index = r * cell_size
-				for c in range(col_steps):
-					col_index = c * cell_size
-					feats_list.append( np.expand_dims(temp_feat[row_index:row_index+cell_size, col_index:col_index+cell_size].flatten(), axis=0) )
+				scaled_im = cv2.resize(img, (sc_c, sc_r), interpolation=cv2.INTER_AREA)
+				feats_list.append(np.expand_dims(vlfeat.hog.hog(scaled_im, cell_size).flatten(), axis=0))
+			else:
+				scaled_im = cv2.resize(img, (sc_c, sc_r), interpolation=cv2.INTER_AREA)
+				num_steps_rows = (scaled_im.shape[0] - win_size)//step_size
+				num_steps_cols = (scaled_im.shape[1] - win_size)//step_size
+				for rs in range(num_steps_rows):
+					i = rs * step_size
+					for cs in range(num_steps_cols):
+						j = cs * step_size
+						current_patch = scaled_im[i:i+win_size, j:j+win_size]
+						feats_list.append(np.expand_dims(vlfeat.hog.hog(current_patch, cell_size).flatten(), axis=0))
 
 	feats_all = np.concatenate(feats_list, axis=0)
 	if return_all:
@@ -143,6 +164,7 @@ def get_random_negative_features(non_face_scn_path, feature_params, num_samples)
 	feats = feats_all[rand_indxs,:]
 			
 	print("Finished extracting negative HoG features. Shape:", feats.shape)
+	print("Time taken:", time() - starting_time)
 	
 	###########################################################################
 	#                             END OF YOUR CODE                            #
@@ -151,38 +173,39 @@ def get_random_negative_features(non_face_scn_path, feature_params, num_samples)
 	return feats
 
 def train_classifier(features_pos, features_neg, C):
-    """
-    This function trains a linear SVM classifier on the positive and negative
-    features obtained from the previous steps. We fit a model to the features
-    and return the svm object.
+	"""
+	This function trains a linear SVM classifier on the positive and negative
+	features obtained from the previous steps. We fit a model to the features
+	and return the svm object.
 
-    Args:
-    -   features_pos: N X D array. This contains an array of positive features
-            extracted from get_positive_feats().
-    -   features_neg: M X D array. This contains an array of negative features
-            extracted from get_negative_feats().
+	Args:
+	-   features_pos: N X D array. This contains an array of positive features
+	        extracted from get_positive_feats().
+	-   features_neg: M X D array. This contains an array of negative features
+	        extracted from get_negative_feats().
 
-    Returns:
-    -   svm: LinearSVC object. This returns a SVM classifier object trained
-            on the positive and negative features.
-    """
-    ###########################################################################
-    #                           TODO: YOUR CODE HERE                          #
-    ###########################################################################
+	Returns:
+	-   svm: LinearSVC object. This returns a SVM classifier object trained
+	        on the positive and negative features.
+	"""
+	###########################################################################
+	#                           TODO: YOUR CODE HERE                          #
+	###########################################################################
 	#---------------- Starter code --------------------------------------------
-    # svm = PseudoSVM(10,features_pos.shape[1])
+	# svm = PseudoSVM(10,features_pos.shape[1])
 	#--------------------------------------------------------------------------
+	print("Training linear SVM with positive samples weights of:", pos_ws)
+	svm 				= LinearSVC(random_state=0, tol=1e-5, loss='hinge', C=C)
+	train_image_feats 	= np.concatenate((features_pos, features_neg), axis=0)
+	y 					= np.concatenate((np.ones((features_pos.shape[0],1)), -1.0 * np.ones((features_neg.shape[0],1))), axis=0) 
+	Ws 					= np.concatenate( (pos_ws * np.ones((features_pos.shape[0],1)), np.ones((features_neg.shape[0],1))), axis=0) 
+	svm.fit(X=train_image_feats, y=np.squeeze(y), sample_weight=np.squeeze(Ws))
 
-    svm 				= LinearSVC(random_state=0, tol=1e-5, loss='hinge', C=C)
-    train_image_feats 	= np.concatenate((features_pos, features_neg), axis=0)
-    y 					= np.concatenate((np.ones((features_pos.shape[0],1)), -1.0 * np.ones((features_neg.shape[0],1))), axis=0) 
-    svm.fit(train_image_feats, np.squeeze(y))
+	###########################################################################
+	#                             END OF YOUR CODE                            #
+	###########################################################################
 
-    ###########################################################################
-    #                             END OF YOUR CODE                            #
-    ###########################################################################
-
-    return svm
+	return svm
 
 def mine_hard_negs(non_face_scn_path, svm, feature_params, conf_thres=-1.0):
 	"""
@@ -211,6 +234,12 @@ def mine_hard_negs(non_face_scn_path, svm, feature_params, conf_thres=-1.0):
 	cell_size = feature_params.get('hog_cell_size', 6)
 
 	negative_files = glob(osp.join(non_face_scn_path, '*.jpg'))
+	
+	print("Mining for hard negs using a step size of:", step_size, "and confidence threshold of:", conf_thres)
+	if len(scales) > 1:
+		print("Using multiple scales for negative feature extraction. Scales are:", scales)
+	else:
+		print("Using single scale ... ")
 
 	###########################################################################
 	#                           TODO: YOUR CODE HERE                          #
@@ -218,12 +247,12 @@ def mine_hard_negs(non_face_scn_path, svm, feature_params, conf_thres=-1.0):
 	
 	W = svm.coef_ # (1, 1116)
 	b = svm.intercept_ # (1,)
-	scales = [1.0, 0.8, 0.7, 0.6, 0.5]
 	
 	#---------------- Starter code --------------------------------------------
 	# n_cell = np.ceil(win_size/cell_size).astype('int')
 	# feats = np.random.rand(len(negative_files), n_cell*n_cell*31)
 	#--------------------------------------------------------------------------
+	starting_time = time()
 	feats_list = []
 	for current_image in negative_files:
 		img = load_image_gray(current_image)
@@ -233,27 +262,31 @@ def mine_hard_negs(non_face_scn_path, svm, feature_params, conf_thres=-1.0):
 			sc_r = int(scale_factor * img.shape[0])
 			sc_c = int(scale_factor * img.shape[1])
 
-			if sc_r < 36:
+			if sc_r < 36 or sc_c < 36:
 				sc_r = 36
-			if sc_c < 36:
 				sc_c = 36
-
-			scaled_im = cv2.resize(img, (sc_c, sc_r), interpolation=cv2.INTER_AREA)
-			temp_feat = vlfeat.hog.hog(scaled_im, cell_size)
-			row_steps, col_steps = temp_feat.shape[0]//cell_size, temp_feat.shape[1]//cell_size
-
-			# extract features at original scale for current image:
-			for r in range(row_steps):
-				row_index = r * cell_size
-				for c in range(col_steps):
-					col_index = c * cell_size
-					curr_window_feat = np.expand_dims(temp_feat[row_index:row_index+cell_size, col_index:col_index+cell_size].flatten(), axis=-1)
-					pred_conf = W.dot(curr_window_feat) + b
-					if pred_conf >= conf_thres:
-						feats_list.append(curr_window_feat)
+				scaled_im = cv2.resize(img, (sc_c, sc_r), interpolation=cv2.INTER_AREA)
+				curr_window_feat = np.expand_dims(vlfeat.hog.hog(scaled_im, cell_size).flatten(), axis=-1)
+				pred_conf = W.dot(curr_window_feat) + b
+				if pred_conf >= conf_thres:
+					feats_list.append(curr_window_feat)
+			else:
+				scaled_im = cv2.resize(img, (sc_c, sc_r), interpolation=cv2.INTER_AREA)
+				num_steps_rows = (scaled_im.shape[0] - win_size)//step_size
+				num_steps_cols = (scaled_im.shape[1] - win_size)//step_size
+				for rs in range(num_steps_rows):
+					i = rs * step_size
+					for cs in range(num_steps_cols):
+						j = cs * step_size				
+						current_patch = scaled_im[i:i+win_size, j:j+win_size]
+						curr_window_feat = np.expand_dims(vlfeat.hog.hog(current_patch, cell_size).flatten(), axis=-1)
+						pred_conf = W.dot(curr_window_feat) + b
+						if pred_conf >= conf_thres:
+							feats_list.append(curr_window_feat)
 
 	feats = np.concatenate(feats_list, axis=-1).T
 	print(feats.shape)
+	print("Time taken:", time() - starting_time)
 	###########################################################################
 	#                             END OF YOUR CODE                            #
 	###########################################################################
@@ -317,11 +350,16 @@ def run_detector(test_scn_path, svm, feature_params, verbose=False, conf_thres=-
 	# params for HOG computation
 	win_size = feature_params.get('template_size', 36)
 	cell_size = feature_params.get('hog_cell_size', 6)
-	scale_factor = feature_params.get('scale_factor', 0.7)
+	# scale_factor = feature_params.get('scale_factor', 0.7)
 	template_size = int(win_size / cell_size)
 
 	W = svm.coef_ # (1, 1116)
 	b = svm.intercept_ # (1,)
+
+	if len(detection_scales)>1:
+		print("Detecting faces at multiple scales of:", detection_scales,"\n")
+	print("Running detector with step size of:", detect_step_size,"and confidence threshold of:", conf_thres,"\n")
+	starting_time = time()
 
 	for idx, im_filename in enumerate(im_filenames):
 		print('Detecting faces in {:s}'.format(im_filename))
@@ -343,30 +381,31 @@ def run_detector(test_scn_path, svm, feature_params, verbose=False, conf_thres=-
 		# cur_confidences = np.random.rand(15)*4 - 2
 		#--------------------------------------------------------------------------
 		
-		# First downscale the image:
-		sc_r = int(scale_factor * im_shape[0])
-		sc_c = int(scale_factor * im_shape[1])
-
-		scaled_im 			 = cv2.resize(im, (sc_c, sc_r), interpolation=cv2.INTER_AREA)
-		temp_feat 			 = vlfeat.hog.hog(scaled_im, cell_size)
-		# set_trace()
-		row_steps, col_steps = temp_feat.shape[0]//cell_size, temp_feat.shape[1]//cell_size
-
 		cur_bboxes = []
 		cur_confidences = []
-		for r in range(row_steps):
-			row_index = r * cell_size
-			for c in range(col_steps):
-				col_index = c * cell_size
-				curr_window_feat = np.expand_dims(temp_feat[row_index:row_index+cell_size, col_index:col_index+cell_size].flatten(), axis=-1)
-				pred_conf = W.dot(curr_window_feat) + b
-				if pred_conf >= conf_thres:
-					cur_confidences.append(pred_conf)
-					cur_bboxes.append( np.expand_dims((float(cell_size)*1.0/scale_factor) * np.array([col_index, row_index, col_index+cell_size, row_index+cell_size]).astype(np.float32), axis=0) )
-					cur_bboxes[-1] = cur_bboxes[-1].astype(int)
+		for scale_factor in detection_scales:
+
+			sc_r = int(scale_factor * im_shape[0])
+			sc_c = int(scale_factor * im_shape[1])
+
+			scaled_im = cv2.resize(im, (sc_c, sc_r), interpolation=cv2.INTER_AREA)
+			num_steps_rows = (scaled_im.shape[0] - win_size)//detect_step_size
+			num_steps_cols = (scaled_im.shape[1] - win_size)//detect_step_size
+
+			for rs in range(num_steps_rows):
+				i = rs * detect_step_size
+				for cs in range(num_steps_cols):
+					j = cs * detect_step_size				
+					current_patch = scaled_im[i:i+win_size, j:j+win_size]
+					curr_window_feat = np.expand_dims(vlfeat.hog.hog(current_patch, cell_size).flatten(), axis=-1)
+					pred_conf = W.dot(curr_window_feat) + b
+					if pred_conf >= conf_thres:
+						cur_confidences.append(pred_conf)
+						cur_bboxes.append( np.expand_dims( (1.0/scale_factor) * np.array([j, i, j+win_size, i+win_size]).astype(np.float32), axis=0)) 
+						cur_bboxes[-1] = cur_bboxes[-1].astype(int)	
 
 		num_detections = len(cur_confidences)		
-		print("Number of faces detected:", num_detections)	
+		# print("Number of faces detected:", num_detections)	
 		if num_detections > 1:
 			cur_confidences = np.squeeze(np.concatenate(cur_confidences, 0))
 			cur_bboxes		= np.concatenate(cur_bboxes, axis=0)
@@ -403,4 +442,10 @@ def run_detector(test_scn_path, svm, feature_params, verbose=False, conf_thres=-
 			confidences = np.hstack((confidences, cur_confidences))
 			image_ids.extend([im_id] * len(cur_confidences))
 
+	print("Time taken:", time() - starting_time)
+
 	return bboxes, confidences, image_ids
+
+
+
+
