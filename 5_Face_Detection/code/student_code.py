@@ -12,15 +12,15 @@ from time import time
 # scales = [1.0, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65]
 # scales = [1.0, 0.9, 0.8, 0.7, 0.6]
 # scales = [0.8, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]
-scales = [1.0, 0.7, 0.6]
-# scales = [1.0]
+# scales = [1.0, 0.7, 0.6]
+scales = [1.0]
 
 # detection_scal .0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4]
-detection_scales = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]
-# detection_scales = [0.8, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]
+# detection_scales = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]
+detection_scales = [1.0, 0.9, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]
 
 return_all 			= False
-step_size 			= 10
+step_size 			= 15
 detect_step_size 	= 10
 pos_ws				= 1.0
 
@@ -354,7 +354,7 @@ def run_detector(test_scn_path, svm, feature_params, verbose=False, conf_thres=-
 	image_ids = []
 
 	# number of top detections to feed to NMS
-	topk = 15
+	topk = 200
 
 	# params for HOG computation
 	win_size = feature_params.get('template_size', 36)
@@ -367,7 +367,7 @@ def run_detector(test_scn_path, svm, feature_params, verbose=False, conf_thres=-
 
 	if len(detection_scales)>1:
 		print("Detecting faces at multiple scales of:", detection_scales,"\n")
-	print("Running detector with step size of:", detect_step_size,"and confidence threshold of:", conf_thres,"\n")
+	print("Running detector with\nstep size:", detect_step_size,"\nconfidence threshold:", conf_thres,"\ntopk:", topk,"\n")
 	starting_time = time()
 
 	for idx, im_filename in enumerate(im_filenames):
