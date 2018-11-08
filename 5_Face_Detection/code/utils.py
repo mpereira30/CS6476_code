@@ -200,6 +200,7 @@ def visualize_hog(svm, feature_params):
   plt.figure(figsize=(4,4))
   plt.imshow((hog_image).astype("uint8"),cmap="gray")
   plt.axis("off")
+  plt.savefig('../html/hog1.png')
 
   plt.figure(figsize=(4,4))
   plt.imshow((hog_image_2).astype("uint8"),cmap="gray")
@@ -286,6 +287,7 @@ def evaluate_detections(bboxes, confidences, image_ids, label_path, draw=True):
     plt.xlabel('Recall')
     plt.ylabel('Precision')
     plt.title('Average precision = {:4.3f}'.format(ap))
+    plt.savefig('../html/precision_vs_recall.png')
 
     plt.figure()
     plt.plot(cum_fp, rec, '-')
@@ -294,6 +296,7 @@ def evaluate_detections(bboxes, confidences, image_ids, label_path, draw=True):
     plt.xlabel('False Positives')
     plt.ylabel('Number of correct detections (recall)')
     plt.title('This figure is meant to match Fig. 6 in Viola-Jones')
+    plt.savefig('../html/correct_vs_fps.png')
 
   order = np.argsort(order)
   tp = tp[order]

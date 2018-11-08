@@ -141,6 +141,7 @@ table td img {
     hljs.initHighlightingOnLoad();
 </script>
 </head>
+
 <body>
 <div id="header" >
 <div id="headersub">
@@ -151,17 +152,12 @@ table td img {
 
 <h2> Project 4: Scene recognition with bag of words</h2>
 
-<!-- <div style="float: right; padding: 20px">
-<img src="placeholder.jpg" />
-<p style="font-size: 14px">Example of a right floating element.</p>
-</div> -->
-
 <p>Things to include in report</p>
 <ol>
-<li>effect of varying parameters: C, multi-scale detection, hard negative mining (with and without cap of 10k)</li>
+<li>effect of varying parameters: hard negative mining (with and without cap of 10k)</li>
 </ol>
 
-<h3>Brief overview of algorithm</h3>
+<h3>Brief overview of algorithm and implementation</h3>
 <p>In this project, I have implemented a face detection pipeline based on the sliding window model which uses a Histogram of Gradients (HoG) representation similar to Dalal-Triggs. I have implemented the following sections:</p>
 
 <ol>
@@ -171,45 +167,110 @@ table td img {
 
 	<p>To extract random negative features (HoG features from non-face scenes), my implementation of <code>get_random_negative_features()</code>, first loads each non-face scene as a greyscale image, and then enters into a nested for-loop wherein the image is down-scaled by preset scale values. Because I choose to use <code>cell_size = 6</code>, my code checks if down-scaling causes the image dimensions to shrink below $(36 \times 36)$, in which case the image is down-scaled to a minimum dimensionality of $(36 \times 36)$ to ensure that the extracted negative HoG feature matches the dimensionality of the extracted positive HoG features. If the down-scaled images are much bigger than $(36 \times 36)$, my code uses a sliding window methodology to extract $(36 \times 36)$ image patches and convert them into flattened HoG features. The sliding window step or stride is preset by <code>step_size</code> parameter. After iterating through all images and storing the extracted features, <code>num_samples=10000</code> indicies are randomly sampled without replacement and the corresponding HoG features are returned. All of the collected features can also be returned by setting the boolean <code>return_all</code> to True.</p>
 </li>
-<li><span lang="latex">\textbf{\underline{Section 2 \(Training linear SVM classifier\)}:-}</span>The </li>
-<li><span lang="latex">\textbf{\underline{Section 4 \(Mining hard negative HoG features\)}:-}</span></li>
-<li><span lang="latex">\textbf{\underline{Section 5 \(Running a sliding window detector on test scenes\)}:-}</span></li>
+<li><span lang="latex">\textbf{\underline{Section 2 \(Training linear SVM classifier\)}:-}</span>
+	<p>The extracted positive and negative features (from Section 1 and Section 3) are used to train a linear SVM with targets of 1.0 and -1.0 respectively. The hyper-parameter C (regularization constant) was tuned by trial and error.</p>  
+</li>
+<li><span lang="latex">\textbf{\underline{Section 4 \(Mining hard negative HoG features\)}:-}</span>
+	<p>The implementation for this section is very similar to code for extracting random negative features as in Section 1. The only difference being that the extracted HoG features are first tested by using the trained SVM (from Section 2) against a confidence threshold (passed as a parameter to <code>mine_hard_negs()</code>) and added to a list of hard negative features only if the prediction confidence exceeds the confidence threshold. In order to achieve high average precision, the confidence threshold is sometimes required to be much lower than 0.0, in which case the list of hard negatives can run into 100's of thousands which slows down the rest of the program (due to memory constraints on numpy arrays). Therefore, my code randomly samples 10,000 indices without replacement and returns the corresponding hard negative features.</p>
+</li>
+<li><span lang="latex">\textbf{\underline{Section 5 \(Running a sliding window detector on test scenes\)}:-}</span>
+	<p>My implementation of <code>run_detector()</code> loads every test image as a greyscale image and then enters into a nested for-loop wherein the image is down-scaled by preset scale values for detection (similar to extracting negative features in Section 1). Then using a sliding window methodology image patches of dimension $(36 \times 36)$ are extracted, converted to HoG features and tested with the trained SVM from previous sections. The same confidence threshold as used for mining hard negatives is used here to determine if the patch is a probable face or not based on the predicted confidence. If the predicted confidence exceeds the confidence threshold, the confidence is stored along with the appropriately re-scaled bounding box coordinates. This process is repeated for all the other detection scales and the stored confidences and bounding boxes are then subject to Non-maximal suppression (NMS). For non-maximal suppression only the first <code>topk</code> detections are used which are determined by sorting the stored confidences. In order to achieve higher average precision, I set <code>topk=200</code> to use plenty of detections for NMS. After NMS, the above process is repeated for all the other images in the test set.</p>
+</li>
+</ol>
+
+<h3>Effects of parameters on performance and results</h3>
+<p>For all below experiments, positive HoG features from the 6,713 Caltech dataset and 10,000 randomly sampled negative features were extracted and kept constant throughout the experiments. For the negative examples, I used single-scale of 1.0 and sliding window step size of 15 to extract HoG features from non-face scenes. </p>
+<ol>
+<li><span lang="latex">\textbf{\underline{C (SVM regularization constant)}:-}</span></li>
+<p>I tested 6 different values of C. I used the following strategy to restrict my choices for C:- I experimented with values greater than 1e-2, such as 5e-1 and 1e-1, however, I ran into errors of convergence failure when training the SVM, whereas, for values smaller than 5e-4, such as 1e-5 and 5e-5, I observed significant overlap between positive and negative examples i.e. from the visualization of percentage of integers vs predicted score, the positive and negative exampes were clearly not well separated at training time for C = 1e-5 and C = 5e-5. The overlap was significantly smaller for the range of C values in (1e-2 to 5e-4).</p>
+<table border=1>
+	<tr>
+		<td>
+		
+			C=1e-4
+			<img src="hog1_1e4.png" width="15%"/>
+			C=5e-4
+			<img src="hog1_5e4.png"  width="15%"/>
+			C=1e-3
+			<img src="hog1_1e3.png" width="15%"/>	
+			C=5e-3
+			<img src="hog1_5e3.png" width="15%"/>						
+		</td>		
+	</tr>
+	<tr>
+		<td>
+			C=1e-2
+			<img src="hog1_1e2.png" width="15%"/>
+			C=2e-2
+			<img src="hog1_2e2.png" width="15%"/>			
+			C=3e-2
+			<img src="hog1_3e2.png" width="15%"/>
+			C=4e-2
+			<img src="hog1_4e2.png" width="15%"/>						
+			C=5e-2
+			<img src="hog1_5e2.png"  width="15%"/>
+		</td>
+	</tr>	
+</table>
+
+<p>I performed an experiment to test the effect of changing C on test performance. For this experiment I did not use hard negative mining. The average precision values observed on the test set are plotted for the corresponding C values below:</p>
+<figure>
+<img src="precisionvsC.png" width=60%>
+</figure>
+
+<p>From this experiment I observed highest accuracy of 0.808 for C = 2e-2 and C = 3e-3. The HoG feature template visualization also corroborates these accuracies as C=2e-2 and C=3e-2 have the closest resemblances to human faces.</p>
+
+<li><span lang="latex">\textbf{\underline{Multi-scale vs Single scale detection}:-}</span>
+<p>For this experiment as well, I did not use hard negative mining. Using the same positive and negative extracted HoG features as above experiment for both multi-scale and single-scale detection, I observed the following results:</p>
+	<p>(a.) Multi-scale experiment parameters: sliding window step size = $\mathbf{10}$, confidence threshold = $\mathbf{-1.0}$, topk = $\mathbf{200}$, C (SVM regularization) = $\mathbf{2e^{-2}}$, Total runtime for detection = $\mathbf{190.292\;seconds}$ </p>
+	<figure>
+	  <img src="precision_vs_recall_multi.png" width=48%>
+	  <img src="correct_vs_fps_multi.png" width=48%>
+	  <figcaption>Detector was run at scales of: [1.0, 0.9, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25] </figcaption>	  
+	</figure>
+	
+	<p>(b.) Single-scale experiment parameters: sliding window step size = $\mathbf{5}$, confidence threshold = $\mathbf{-1.0}$, topk = $\mathbf{200}$, C (SVM regularization) = $\mathbf{2e^{-2}}$, Total runtime for detection = $\mathbf{147.91\;seconds}$  </p>
+	<figure>
+	  <img src="precision_vs_recall_single.png" width=48%>
+	  <img src="correct_vs_fps_single.png" width=48%>
+	  <figcaption>Detector was run at scale of 1.0 </figcaption>	  
+	</figure>
+
+	<p>(c.) Same multi-scale parameters as in (a.) except with sliding window step size = $\mathbf{5}$. Total runtime for detection = $\mathbf{751.83\;seconds}$</p>
+	<figure>
+	  <img src="precision_vs_recall_multi5.png" width=48%>
+	  <img src="correct_vs_fps_multi5.png" width=48%>
+	  <figcaption>Detector was run at scales of: [1.0, 0.9, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25] </figcaption>	  
+	</figure>	
+<p>From the above results I can draw 2 conclusions:</p>
+<p>(i.)Downscaling helps</p>
+<p>(ii.)smaller steps helps improve accuracy but slows down detection.</p>
+
+</li>
+
+
+<li><span lang="latex">\textbf{\underline{Hard mining for negative HoG features}:-}</span>
+
+<p>Starting with the same positive and negative extracted HoG features as above experiments, hard negative HoG feature mining was performed using the same scale of 1.0 and sliding window step size of 15 as for extracting random negative HoG features and the trained SVM with C=2e-2. A confidence threshold of -1.0 was used to decide if a particular negative HoG feature is a false positive or not using the SVM prediction confidence. This threshold was the same as that used during detection on test images. The new SVM with random extracted negative HoGs and hard mined negatives was trained using the same value for regularization constant of C=2e-2. Following are some results: </p>
+
+	<p>Experiment parameters: sliding window step size = $\mathbf{10}$, confidence threshold = $\mathbf{-1.0}$, topk = $\mathbf{200}$, C (SVM regularization) = $\mathbf{2e^{-2}}$, Detector was run at scales of: [1.0, 0.9, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]  </p>
+	<figure>
+	  <img src="precision_vs_recall_hardnegs.png" width=48%>
+	  <img src="correct_vs_fps_hardnegs.png" width=48%>
+	  <figcaption>WITH Hard mined negative HoG features</figcaption>	  
+	</figure>
+	
+
+	<figure>
+	  <img src="precision_vs_recall_vanilla.png" width=48%>
+	  <img src="correct_vs_fps_vanilla.png" width=48%>
+	  <figcaption>WITHOUT Hard mined negative HoG features</figcaption>	  
+	</figure>
+
+</li>
+
 </ol>
 
 
-<!-- <div style="clear:both">
-<h3>Example heading</h3>
-
-<p> 	Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
-
-<h2>Example of code with highlighting</h2>
-The javascript in the <code>highlighting</code> folder is configured to do syntax highlighting.<p>
-
-<h3>Results in a table</h3>
-
-<table border=1>
-<tr>
-<td>
-<img src="placeholder.jpg" width="24%"/>
-<img src="placeholder.jpg"  width="24%"/>
-<img src="placeholder.jpg" width="24%"/>
-<img src="placeholder.jpg" width="24%"/>
-</td>
-</tr>
-
-<tr>
-<td>
-<img src="placeholder.jpg" width="24%"/>
-<img src="placeholder.jpg"  width="24%"/>
-<img src="placeholder.jpg" width="24%"/>
-<img src="placeholder.jpg" width="24%"/>
-</td>
-</tr>
-
-</table>
-
-<div style="clear:both" >
-<p> 	Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
-</div>
 </body>
-</html> -->
+</html>

@@ -18,6 +18,7 @@ scales = [1.0]
 # detection_scal .0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4]
 # detection_scales = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]
 detection_scales = [1.0, 0.9, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]
+# detection_scales = [1.0]
 
 return_all 			= False
 step_size 			= 15
@@ -456,5 +457,10 @@ def run_detector(test_scn_path, svm, feature_params, verbose=False, conf_thres=-
 	return bboxes, confidences, image_ids
 
 
+def train_classifier_NN(features_pos, features_neg):
 
+	train_image_feats 	= np.concatenate((features_pos, features_neg), axis=0)
+	y 					= np.concatenate((np.ones((features_pos.shape[0],1)), np.zeros((features_neg.shape[0],1))), axis=0) 	
 
+	# input_placeholder	= 
+	# targets_placeholder	= 
