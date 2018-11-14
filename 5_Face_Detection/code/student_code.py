@@ -7,23 +7,19 @@ from random import shuffle
 from IPython.core.debugger import set_trace
 from sklearn.svm import LinearSVC
 from time import time
+import tensorflow as tf
+import sys
 
-# scales = [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3]
-# scales = [1.0, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65]
-# scales = [1.0, 0.9, 0.8, 0.7, 0.6]
 # scales = [0.8, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]
 # scales = [1.0, 0.7, 0.6]
 scales = [1.0]
-
-# detection_scal .0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4]
-# detection_scales = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]
 detection_scales = [1.0, 0.9, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]
-# detection_scales = [1.0]
 
 return_all 			= False
 step_size 			= 15
 detect_step_size 	= 10
 pos_ws				= 1.0
+topk_value			= 250
 
 def get_positive_features(train_path_pos, feature_params):
 	"""
@@ -158,13 +154,13 @@ def get_random_negative_features(non_face_scn_path, feature_params, num_samples)
 						feats_list.append(np.expand_dims(vlfeat.hog.hog(current_patch, cell_size).flatten(), axis=0))
 
 	feats_all = np.concatenate(feats_list, axis=0)
+	print("Finished extracting negative HoG features. Shape:", feats_all.shape)
 	if return_all:
 		rand_indxs = np.random.choice(feats_all.shape[0], feats_all.shape[0], replace=False)
 	else:
 		rand_indxs = np.random.choice(feats_all.shape[0], num_samples, replace=False)
 	feats = feats_all[rand_indxs,:]
-			
-	print("Finished extracting negative HoG features. Shape:", feats.shape)
+	print("Returning negative HoG features. Shape:", feats.shape)
 	print("Time taken:", time() - starting_time)
 	
 	###########################################################################
@@ -355,7 +351,7 @@ def run_detector(test_scn_path, svm, feature_params, verbose=False, conf_thres=-
 	image_ids = []
 
 	# number of top detections to feed to NMS
-	topk = 200
+	topk = topk_value
 
 	# params for HOG computation
 	win_size = feature_params.get('template_size', 36)
@@ -457,10 +453,224 @@ def run_detector(test_scn_path, svm, feature_params, verbose=False, conf_thres=-
 	return bboxes, confidences, image_ids
 
 
-def train_classifier_NN(features_pos, features_neg):
+class NN_classifier:
 
-	train_image_feats 	= np.concatenate((features_pos, features_neg), axis=0)
-	y 					= np.concatenate((np.ones((features_pos.shape[0],1)), np.zeros((features_neg.shape[0],1))), axis=0) 	
+	def __init__(self, batch_size, feature_dim, fnn_layer_size, max_gradient_norm=1.0, learning_rate=1e-3, training_epochs=100):
 
-	# input_placeholder	= 
-	# targets_placeholder	= 
+		self.batch_size = batch_size
+		self.feature_dim = feature_dim		
+		self.max_gradient_norm = max_gradient_norm
+		self.learning_rate = learning_rate
+		self.training_epochs = training_epochs
+
+		with tf.variable_scope("fnn_network", reuse=tf.AUTO_REUSE):
+			with tf.device('/CPU:0'): 		
+
+				self.inputs_placeholder  = tf.placeholder(tf.float32, [None, self.feature_dim]) 
+				self.targets_placeholder = tf.placeholder(tf.float32, [None, 1]) 
+
+				self.L1_W = tf.get_variable(name="l1_w", shape=[self.feature_dim, fnn_layer_size], dtype=tf.float32, initializer=tf.random_normal_initializer())
+				self.L1_B = tf.get_variable(name="l1_b", shape=[fnn_layer_size], dtype=tf.float32,	initializer=tf.zeros_initializer())
+				self.L2_W = tf.get_variable(name="l2_w", shape=[fnn_layer_size, fnn_layer_size], dtype=tf.float32, initializer=tf.random_normal_initializer())
+				self.L2_B = tf.get_variable(name="l2_b", shape=[fnn_layer_size], dtype=tf.float32, initializer=tf.zeros_initializer())
+				self.L3_W = tf.get_variable(name="l3_w", shape=[fnn_layer_size, fnn_layer_size], dtype=tf.float32, initializer=tf.random_normal_initializer())
+				self.L3_B = tf.get_variable(name="l3_b", shape=[fnn_layer_size], dtype=tf.float32, initializer=tf.zeros_initializer())				
+				self.O_W = tf.get_variable(name="o_w", shape=[fnn_layer_size, 1], dtype=tf.float32, initializer=tf.random_normal_initializer())
+				self.O_B = tf.get_variable(name="o_b", shape=[1], dtype=tf.float32, initializer=tf.zeros_initializer())
+
+				def predict_confidence_graph(input_feature):
+					
+					l1 = tf.nn.relu(tf.matmul(input_feature, self.L1_W) + self.L1_B)
+					l2 = tf.nn.relu(tf.matmul(l1, self.L2_W) + self.L2_B)
+					# output = tf.tanh(tf.matmul(l2, self.O_W) + self.O_B)
+
+					l3 = tf.nn.relu(tf.matmul(l2, self.L3_W) + self.L3_B)
+					output = tf.tanh(tf.matmul(l3, self.O_W) + self.O_B)
+					
+					return output
+
+				self.predicted_confidences = predict_confidence_graph(self.inputs_placeholder)
+				self.total_loss = tf.reduce_mean(tf.squeeze(tf.square(self.targets_placeholder - self.predicted_confidences)))
+
+				params = tf.trainable_variables()
+				gradients = tf.gradients(self.total_loss, params)
+				clipped_gradients, _ = tf.clip_by_global_norm(gradients, self.max_gradient_norm) 
+				optimizer = tf.train.AdamOptimizer(self.learning_rate)
+				self.train_step = optimizer.apply_gradients(zip(clipped_gradients, params))	
+
+				print("Length of trainable variables list is:", len(params))
+				total_variables = 0
+				for _var in params:
+					print(_var)
+					mul = 1
+					vals = _var.get_shape().as_list()
+					for v in vals:
+						mul *= v
+					total_variables += mul
+				print("")
+				print("Total number of trainable variables are = ", total_variables)	
+
+		self.sess = tf.Session()	
+
+	def predict_confidences(self, input_features): # input_features should be of shape (N,D)
+		return self.sess.run([self.predicted_confidences], feed_dict={self.inputs_placeholder: input_features})
+
+	def train_model(self, input_data, target_data):
+
+		num_train_points = input_data.shape[0]
+		print("Number of training data points:", num_train_points)
+		
+		self.sess.run(tf.global_variables_initializer())
+		num_mini_batches_train = num_train_points // self.batch_size
+		
+		for i in range(self.training_epochs):
+			
+			rnd_indxs_train = np.random.choice(num_train_points, num_train_points, replace=False)
+
+			epoch_loss_list = []
+			for j in range(num_mini_batches_train):
+
+				inputs_train 		= np.zeros((self.batch_size, self.feature_dim))
+				targets_train	 	= np.zeros((self.batch_size, 1))
+
+				mini_batch_indx = j * self.batch_size
+
+				for b in range(self.batch_size):
+					inputs_train[b,:] 	= input_data[rnd_indxs_train[mini_batch_indx+b],:]
+					targets_train[b,:] 	= target_data[rnd_indxs_train[mini_batch_indx+b],:]
+
+				loss, _ = self.sess.run([self.total_loss, self.train_step],
+					feed_dict={
+					self.inputs_placeholder:  inputs_train,
+					self.targets_placeholder: targets_train
+					})
+
+				epoch_loss_list.append(loss)		
+
+				sys.stdout.write("Epoch: %d, Avg. train loss: %f \r" % (i+1, sum(epoch_loss_list)/len(epoch_loss_list)))
+				sys.stdout.flush()
+
+		print("Final losses, Train:", sum(epoch_loss_list)/len(epoch_loss_list))	
+
+
+
+def run_detector_nn(test_scn_path, nn, feature_params, verbose=False, conf_thres=-1.0):
+
+	im_filenames = sorted(glob(osp.join(test_scn_path, '*.jpg')))
+	bboxes = np.empty((0, 4))
+	confidences = np.empty(0)
+	image_ids = []
+
+	# number of top detections to feed to NMS
+	topk = topk_value
+
+	# params for HOG computation
+	win_size = feature_params.get('template_size', 36)
+	cell_size = feature_params.get('hog_cell_size', 6)
+	template_size = int(win_size / cell_size)
+
+	if len(detection_scales)>1:
+		print("Detecting faces at multiple scales of:", detection_scales,"\n")
+	print("Running detector with\nstep size:", detect_step_size,"\nconfidence threshold:", conf_thres,"\ntopk:", topk,"\n")
+	starting_time = time()
+
+	for idx, im_filename in enumerate(im_filenames):
+		print('Detecting faces in {:s}'.format(im_filename))
+		im = load_image_gray(im_filename)
+		im_id = osp.split(im_filename)[-1]
+		im_shape = im.shape
+		
+		#------------------------------------------------------------------------------------------		
+		# cur_bboxes = []
+		# cur_confidences = []
+		# for scale_factor in detection_scales:
+
+		# 	sc_r = int(scale_factor * im_shape[0])
+		# 	sc_c = int(scale_factor * im_shape[1])
+
+		# 	scaled_im = cv2.resize(im, (sc_c, sc_r), interpolation=cv2.INTER_AREA)
+		# 	num_steps_rows = (scaled_im.shape[0] - win_size)//detect_step_size
+		# 	num_steps_cols = (scaled_im.shape[1] - win_size)//detect_step_size
+
+		# 	all_feats_list = []
+		# 	all_bbs_list   = []
+		# 	for rs in range(num_steps_rows):
+		# 		i = rs * detect_step_size
+		# 		for cs in range(num_steps_cols):
+		# 			j = cs * detect_step_size				
+		# 			current_patch = scaled_im[i:i+win_size, j:j+win_size]
+		# 			all_feats_list.append(np.expand_dims(vlfeat.hog.hog(current_patch, cell_size).flatten(),0))
+		# 			all_bbs_list.append(np.expand_dims( (1.0/scale_factor) * np.array([j, i, j+win_size, i+win_size]).astype(np.float32), axis=0))
+
+		# 	if len(all_feats_list)>1:
+		# 		all_feats = np.concatenate(all_feats_list, 0)
+		# 		all_confs = nn.predict_confidences(all_feats)[0]
+
+		# 		for i_ in range(len(all_bbs_list)):
+		# 			if all_confs[i_,:] >= conf_thres:
+		# 				cur_confidences.append(all_confs[i_,:])
+		# 				cur_bboxes.append(all_bbs_list[i_]) 
+		# 				cur_bboxes[-1] = cur_bboxes[-1].astype(int)	
+		#------------------------------------------------------------------------------------------		
+		all_feats_list = []
+		all_bbs_list   = []
+		for scale_factor in detection_scales:
+
+			sc_r = int(scale_factor * im_shape[0])
+			sc_c = int(scale_factor * im_shape[1])
+
+			scaled_im = cv2.resize(im, (sc_c, sc_r), interpolation=cv2.INTER_AREA)
+			num_steps_rows = (scaled_im.shape[0] - win_size)//detect_step_size
+			num_steps_cols = (scaled_im.shape[1] - win_size)//detect_step_size
+
+			for rs in range(num_steps_rows):
+				i = rs * detect_step_size
+				for cs in range(num_steps_cols):
+					j = cs * detect_step_size				
+					current_patch = scaled_im[i:i+win_size, j:j+win_size]
+					all_feats_list.append(np.expand_dims(vlfeat.hog.hog(current_patch, cell_size).flatten(),0))
+					all_bbs_list.append(np.expand_dims( (1.0/scale_factor) * np.array([j, i, j+win_size, i+win_size]).astype(np.float32), axis=0))
+
+		cur_bboxes = []
+		cur_confidences = []
+
+		all_feats = np.concatenate(all_feats_list, 0)
+		all_confs = nn.predict_confidences(all_feats)[0]
+
+		for i_ in range(len(all_bbs_list)):
+			if all_confs[i_,:] >= conf_thres:
+				cur_confidences.append(all_confs[i_,:])
+				cur_bboxes.append(all_bbs_list[i_]) 
+				cur_bboxes[-1] = cur_bboxes[-1].astype(int)	
+		#------------------------------------------------------------------------------------------		
+
+
+		num_detections = len(cur_confidences)		
+		print("Number of faces detected:", num_detections)	
+		if num_detections > 1:
+			cur_confidences = np.squeeze(np.concatenate(cur_confidences, 0))
+			cur_bboxes		= np.concatenate(cur_bboxes, axis=0)
+		elif num_detections == 1:
+			cur_confidences = np.squeeze(cur_confidences[-1], axis=-1)
+			cur_bboxes		= cur_bboxes[-1]	
+
+		if num_detections > 1:	
+
+			idsort = np.argsort(-cur_confidences)[:topk]
+			cur_bboxes = cur_bboxes[idsort]
+			cur_confidences = cur_confidences[idsort]
+
+			is_valid_bbox = non_max_suppression_bbox(cur_bboxes, cur_confidences,
+			    im_shape, verbose=verbose)
+
+			print('NMS done, {:d} detections passed'.format(sum(is_valid_bbox)))
+			cur_bboxes = cur_bboxes[is_valid_bbox]
+			cur_confidences = cur_confidences[is_valid_bbox]
+	
+			bboxes = np.vstack((bboxes, cur_bboxes))
+			confidences = np.hstack((confidences, cur_confidences))
+			image_ids.extend([im_id] * len(cur_confidences))
+
+	print("Time taken:", time() - starting_time)
+
+	return bboxes, confidences, image_ids

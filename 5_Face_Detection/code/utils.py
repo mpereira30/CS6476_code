@@ -449,6 +449,7 @@ def visualize_detections_by_image_no_gt(bboxes, confidences, image_ids,
     test_id = im_filename.split('/')[-1]
     test_id = test_id.split('\\')[-1] # in case the file path use backslash
     cur_test_image = load_image(im_filename)
+    # print(cur_test_image.shape)
     cur_detections = [i for i, im_id in enumerate(image_ids) if im_id == test_id]
     cur_bboxes = bboxes[cur_detections]
     cur_confidences = confidences[cur_detections]
@@ -459,6 +460,7 @@ def visualize_detections_by_image_no_gt(bboxes, confidences, image_ids,
     for bb in cur_bboxes:
       plt.plot(bb[[0, 2, 2, 0, 0]], bb[[1, 1, 3, 3, 1]], 'g')
     plt.title('{:s} green=detection'.format(test_id))
+    plt.savefig('../html/classtest/'+test_id, dpi=150)
 
 
 class PseudoSVM():

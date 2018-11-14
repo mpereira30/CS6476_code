@@ -152,9 +152,9 @@ table td img {
 
 <h2> Project 4: Scene recognition with bag of words</h2>
 
-<p>Things to include in report</p>
 <ol>
-<li>effect of varying parameters: hard negative mining (with and without cap of 10k)</li>
+	<p>Things to add</p>
+	<li>effect of Threshold</li>
 </ol>
 
 <h3>Brief overview of algorithm and implementation</h3>
@@ -168,10 +168,10 @@ table td img {
 	<p>To extract random negative features (HoG features from non-face scenes), my implementation of <code>get_random_negative_features()</code>, first loads each non-face scene as a greyscale image, and then enters into a nested for-loop wherein the image is down-scaled by preset scale values. Because I choose to use <code>cell_size = 6</code>, my code checks if down-scaling causes the image dimensions to shrink below $(36 \times 36)$, in which case the image is down-scaled to a minimum dimensionality of $(36 \times 36)$ to ensure that the extracted negative HoG feature matches the dimensionality of the extracted positive HoG features. If the down-scaled images are much bigger than $(36 \times 36)$, my code uses a sliding window methodology to extract $(36 \times 36)$ image patches and convert them into flattened HoG features. The sliding window step or stride is preset by <code>step_size</code> parameter. After iterating through all images and storing the extracted features, <code>num_samples=10000</code> indicies are randomly sampled without replacement and the corresponding HoG features are returned. All of the collected features can also be returned by setting the boolean <code>return_all</code> to True.</p>
 </li>
 <li><span lang="latex">\textbf{\underline{Section 2 \(Training linear SVM classifier\)}:-}</span>
-	<p>The extracted positive and negative features (from Section 1 and Section 3) are used to train a linear SVM with targets of 1.0 and -1.0 respectively. The hyper-parameter C (regularization constant) was tuned by trial and error.</p>  
+	<p>The extracted positive and negative features (from Section 1 and Section 3) are used to train a linear SVM with targets of 1.0 and -1.0 respectively. The hyper-parameter C (regularization constant) was hand tuned (please see experiments below).</p>  
 </li>
 <li><span lang="latex">\textbf{\underline{Section 4 \(Mining hard negative HoG features\)}:-}</span>
-	<p>The implementation for this section is very similar to code for extracting random negative features as in Section 1. The only difference being that the extracted HoG features are first tested by using the trained SVM (from Section 2) against a confidence threshold (passed as a parameter to <code>mine_hard_negs()</code>) and added to a list of hard negative features only if the prediction confidence exceeds the confidence threshold. In order to achieve high average precision, the confidence threshold is sometimes required to be much lower than 0.0, in which case the list of hard negatives can run into 100's of thousands which slows down the rest of the program (due to memory constraints on numpy arrays). Therefore, my code randomly samples 10,000 indices without replacement and returns the corresponding hard negative features.</p>
+	<p>The implementation for this section is very similar to code for extracting random negative features as in Section 1. The only difference being that the extracted HoG features are first tested by using the trained SVM (from Section 2) against a confidence threshold (passed as a parameter to <code>mine_hard_negs()</code>) and added to a list of hard negative features only if the prediction confidence exceeds the confidence threshold. In order to achieve high average precision, the confidence threshold is sometimes required to be much lower than 0.0, in which case the list of hard negatives can run into 100's of thousands which slows down the rest of the program (due to memory constraints on numpy arrays). Therefore, my code randomly samples 10,000 indices without replacement and returns the corresponding hard negative features if the number of extracted hard negatives is greater than 10,000.</p>
 </li>
 <li><span lang="latex">\textbf{\underline{Section 5 \(Running a sliding window detector on test scenes\)}:-}</span>
 	<p>My implementation of <code>run_detector()</code> loads every test image as a greyscale image and then enters into a nested for-loop wherein the image is down-scaled by preset scale values for detection (similar to extracting negative features in Section 1). Then using a sliding window methodology image patches of dimension $(36 \times 36)$ are extracted, converted to HoG features and tested with the trained SVM from previous sections. The same confidence threshold as used for mining hard negatives is used here to determine if the patch is a probable face or not based on the predicted confidence. If the predicted confidence exceeds the confidence threshold, the confidence is stored along with the appropriately re-scaled bounding box coordinates. This process is repeated for all the other detection scales and the stored confidences and bounding boxes are then subject to Non-maximal suppression (NMS). For non-maximal suppression only the first <code>topk</code> detections are used which are determined by sorting the stored confidences. In order to achieve higher average precision, I set <code>topk=200</code> to use plenty of detections for NMS. After NMS, the above process is repeated for all the other images in the test set.</p>
@@ -218,7 +218,7 @@ table td img {
 <img src="precisionvsC.png" width=60%>
 </figure>
 
-<p>From this experiment I observed highest accuracy of 0.808 for C = 2e-2 and C = 3e-3. The HoG feature template visualization also corroborates these accuracies as C=2e-2 and C=3e-2 have the closest resemblances to human faces.</p>
+<p>From this experiment I observed highest accuracy of 0.808 for C = 2e-2 and C = 3e-3. The HoG feature template visualization also corroborates these accuracies as C=2e-2 and C=3e-2 have the closest resemblances to human faces. Thus, both the HoG template visualization and the visualization showing how well positive and negative examples are separated at training time are useful tools to pick the range of valid regularization constants for training the linear SVM classifier for face detection.</p>
 
 <li><span lang="latex">\textbf{\underline{Multi-scale vs Single scale detection}:-}</span>
 <p>For this experiment as well, I did not use hard negative mining. Using the same positive and negative extracted HoG features as above experiment for both multi-scale and single-scale detection, I observed the following results:</p>
@@ -243,15 +243,15 @@ table td img {
 	  <figcaption>Detector was run at scales of: [1.0, 0.9, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25] </figcaption>	  
 	</figure>	
 <p>From the above results I can draw 2 conclusions:</p>
-<p>(i.)Downscaling helps</p>
-<p>(ii.)smaller steps helps improve accuracy but slows down detection.</p>
+<p>(i.)Down scaling the test image to multiple lower scales and running a sliding window detector on those scaled images increases the probability of a complete face being enclosed within the window / template at some lower scale than the original image. Explanation:- Some of the test scenes could consist of faces whose pixel dimensions are much larger than the sliding window size / template size. Testing with multiple down-scaled versions of the same image can eventually result in the face fitting within the bounds of the sliding window.</p>
+<p>(ii.)Smaller step-size of sliding window detector helps improve accuracy but slows down detection. Explanation:- Not only have the images to be down-sampled so that the probability of faces fitting within the sliding window is increased, but the window has to ideally step with a stride of 1 pixel to ensure that the face is eventually detected. However, for high resolution images this can be extremely slow and usually in practice, I would imagine the step / stride size to be proportional to image dimensions. This can also be justified by the fact that high resolution images have a lot of redundant information and non-face pixel intensities which don't have to be tested with the detector with very small steps.</p>
 
 </li>
 
 
 <li><span lang="latex">\textbf{\underline{Hard mining for negative HoG features}:-}</span>
 
-<p>Starting with the same positive and negative extracted HoG features as above experiments, hard negative HoG feature mining was performed using the same scale of 1.0 and sliding window step size of 15 as for extracting random negative HoG features and the trained SVM with C=2e-2. A confidence threshold of -1.0 was used to decide if a particular negative HoG feature is a false positive or not using the SVM prediction confidence. This threshold was the same as that used during detection on test images. The new SVM with random extracted negative HoGs and hard mined negatives was trained using the same value for regularization constant of C=2e-2. Following are some results: </p>
+<p>Starting with the same positive and negative extracted HoG features as above experiments, hard negative HoG feature mining was performed using the same scale of 1.0 and sliding window step size of 15 as for extracting random negative HoG features and the trained SVM with C=2e-2 was used. A confidence threshold of -1.0 was used to decide if a particular negative HoG feature is a false positive or not using the SVM prediction confidence. This threshold was the same as that used during detection on test images. The new SVM with random extracted negative HoGs and hard mined negatives was trained using the same value for regularization constant of C=2e-2. Following are some results: </p>
 
 	<p>Experiment parameters: sliding window step size = $\mathbf{10}$, confidence threshold = $\mathbf{-1.0}$, topk = $\mathbf{200}$, C (SVM regularization) = $\mathbf{2e^{-2}}$, Detector was run at scales of: [1.0, 0.9, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]  </p>
 	<figure>
@@ -266,10 +266,79 @@ table td img {
 	  <img src="correct_vs_fps_vanilla.png" width=48%>
 	  <figcaption>WITHOUT Hard mined negative HoG features</figcaption>	  
 	</figure>
+<p>The above results are in agreement with the explanation on the project webpage of hard negative mining being helpful under a strict budget of negative HoG features. In these experiments, because I restricted the number of random negative HoG features returned to <code>num_samples=10000</code>, and did not choose to return all of the negative features, hard negative mining proved to be useful in reducing false positives and clearly resulting in higher accuracy.</p>
+</li>
 
+<li><span lang="latex">\textbf{\underline{Effect of changing the number of data to feed NMS}:-}</span>
+<p>For investigating the effect of number of data points fed to NMS i.e. the <code>topk</code> variable, the positive and negative features were extracted once and kept the same throughout the experiment. Hard mining was not used for these experiments. Different values for <code>topk</code> were tested and average precision on test set measured. Below is a plot showing results from this experiment:</p>
+<p>Experiment parameters: sliding window step size = $\mathbf{10}$, confidence threshold = $\mathbf{-1.0}$, C (SVM regularization) = $\mathbf{2e^{-2}}$, Detector was run at scales of: [1.0, 0.9, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]  </p>
+
+<figure>
+<img src="precisionvstopk.png" width=60%>
+<figcaption>Highest average precision achieved for topk = 250 and 300 of 81.6%</figcaption>	  
+</figure>
+
+<p>Discussion: From the above plot it is clear that as the value of the variable <code>topk</code> is increased the average precision increases. For this experiment, I used a step size of 10 for the sliding window detection. This step size results in a large number of detections many of which are false positives. However, there also exist lower confidence true positives which need to be considered to increase the average precision. Thus, increasing the value of <code>topk</code> increases the chances of detecting lower confidence true positives which would otherwise not be considered if the value of <code>topk</code> is low (i.e. consider only the high confidence detections). Some of these high confidence detections could be false positives. This explains why average precision rises when hard mining is utilized and <code>topk</code> is kept constant. Hard mining allows to weed out the high confidence false positives and increase average precision for the same number of topk high confidence detections.</p>
+</li>
+
+<li><span lang="latex">\textbf{\underline{Effect of changing the confidence threshold}:-}</span>
+	
 </li>
 
 </ol>
+
+<h3>Extra Credit: Use additional classification schemes - Neural Nets</h3>
+<p>For a different classification scheme, my idea was to replace the linear SVM classifier by a fully connected neural network. The intuition is that a neural network would perform better by learning a non-linear decision boundary as compared to a linear decision boundary of a linear SVM. I have implemented a python class called <code>NN_classifier</code> that builds a computational graph in Tensorflow when instantiated. It has two methods <code>train_model</code> and <code>predict_confidences</code> to train the neural network classifier with the same kind of inputs to the method that trains the linear classifier and to predict confidences during multi-scale sliding window detection.</p>
+
+<h3>Face detections on class photos</h3>
+
+<figure>
+  <img src="classtest/4476_2016_class_easy.jpg" width=100%>
+</figure>
+
+<figure>
+  <img src="classtest/4476_2016_class_hard.jpg" width=100%>
+</figure>
+
+<figure>
+  <img src="classtest/4476_2017_class_easy.jpg" width=100%>
+</figure>
+
+<figure>
+  <img src="classtest/4476_2017_class_hard.jpg" width=100%>
+</figure>
+
+<figure>
+  <img src="classtest/4495_2015_class_easy.jpg" width=100%>
+</figure>
+
+<figure>
+  <img src="classtest/cs143_2011_class_easy.jpg" width=100%>
+</figure>
+
+<figure>
+  <img src="classtest/cs143_2011_class_hard.jpg" width=100%>
+</figure>
+
+<figure>
+  <img src="classtest/cs143_2013_class_easy_01.jpg" width=100%>
+</figure>
+
+<figure>
+  <img src="classtest/cs143_2013_class_easy_02.jpg" width=100%>
+</figure>
+
+<figure>
+  <img src="classtest/cs143_2013_class_hard_01.jpg" width=100%>
+</figure>
+
+<figure>
+  <img src="classtest/cs143_2013_class_hard_02.jpg" width=100%>
+</figure>
+
+<figure>
+  <img src="classtest/cs143_2013_class_hard_03.jpg" width=100%>
+</figure>
 
 
 </body>
