@@ -152,11 +152,6 @@ table td img {
 
 <h2> Project 4: Scene recognition with bag of words</h2>
 
-<ol>
-	<p>Things to add</p>
-	<li>effect of Threshold</li>
-</ol>
-
 <h3>Brief overview of algorithm and implementation</h3>
 <p>In this project, I have implemented a face detection pipeline based on the sliding window model which uses a Histogram of Gradients (HoG) representation similar to Dalal-Triggs. I have implemented the following sections:</p>
 
@@ -182,7 +177,7 @@ table td img {
 <p>For all below experiments, positive HoG features from the 6,713 Caltech dataset and 10,000 randomly sampled negative features were extracted and kept constant throughout the experiments. For the negative examples, I used single-scale of 1.0 and sliding window step size of 15 to extract HoG features from non-face scenes. </p>
 <ol>
 <li><span lang="latex">\textbf{\underline{C (SVM regularization constant)}:-}</span></li>
-<p>I tested 6 different values of C. I used the following strategy to restrict my choices for C:- I experimented with values greater than 1e-2, such as 5e-1 and 1e-1, however, I ran into errors of convergence failure when training the SVM, whereas, for values smaller than 5e-4, such as 1e-5 and 5e-5, I observed significant overlap between positive and negative examples i.e. from the visualization of percentage of integers vs predicted score, the positive and negative exampes were clearly not well separated at training time for C = 1e-5 and C = 5e-5. The overlap was significantly smaller for the range of C values in (1e-2 to 5e-4).</p>
+<p>I used the following strategy to restrict my choices for C:- I experimented with values greater than 1e-2, such as 5e-1 and 1e-1, however, I ran into errors of convergence failure when training the SVM, whereas, for values smaller than 5e-4, such as 1e-5 and 5e-5, I observed significant overlap between positive and negative examples i.e. from the visualization of 'percentage of integers' vs 'predicted score', the positive and negative exampes were clearly not well separated at training time for C = 1e-5 and C = 5e-5. The overlap was significantly smaller for the range of C values in (5e-2 to 5e-4).</p>
 <table border=1>
 	<tr>
 		<td>
@@ -218,7 +213,7 @@ table td img {
 <img src="precisionvsC.png" width=60%>
 </figure>
 
-<p>From this experiment I observed highest accuracy of 0.808 for C = 2e-2 and C = 3e-3. The HoG feature template visualization also corroborates these accuracies as C=2e-2 and C=3e-2 have the closest resemblances to human faces. Thus, both the HoG template visualization and the visualization showing how well positive and negative examples are separated at training time are useful tools to pick the range of valid regularization constants for training the linear SVM classifier for face detection.</p>
+<p>From this experiment I observed highest accuracy of 0.808 for C = 2e-2 and C = 3e-2. The HoG feature template visualization also corroborates these accuracies as C=2e-2 and C=3e-2 have the closest resemblances to human faces. Thus, both the HoG template visualization and the visualization showing how well positive and negative examples are separated at training time are useful tools to pick the range of valid regularization constants for training the linear SVM classifier for face detection.</p>
 
 <li><span lang="latex">\textbf{\underline{Multi-scale vs Single scale detection}:-}</span>
 <p>For this experiment as well, I did not use hard negative mining. Using the same positive and negative extracted HoG features as above experiment for both multi-scale and single-scale detection, I observed the following results:</p>
@@ -282,8 +277,24 @@ table td img {
 </li>
 
 <li><span lang="latex">\textbf{\underline{Effect of changing the confidence threshold}:-}</span>
-	
+<p>Similar to above experiments, positive and negative features are extracted at the beginning of the experiment and kept constant throughout the experiment. The best values from above experiments are considered namely, $C=2e^{-2},\;topk=250$ and the same multi-scale scale factors for sliding window detection. Hard negative mining was not utilized for this experiment. Through my experiment I observed that the average precision is NOT very sensitive to confidence threshold (refer plot below). </p>
+<figure>
+<img src="precisionvsconfthres.png" width=60%>
+<figcaption>Experiment with different values of confidence threshold = [-2.0, -1.0, -0.5, -0.1, -0.05, 0.0] and topk = 250</figcaption>
+</figure>	
+<p>Discussion: My initial guess for the lack of sensitivity of the average precision to confidence threshold was the high value of <code>topk=250</code>. This feeds a large number of detections (with the different values of confidence threshold) to NMS which tends to maintain the average precision. Therefore, I decided to conduct another experiment and observe the effects of confidence threshold on average precision when topk is small. However, my observations were very similar to the above plot i.e. different but almost constant curve of average precision vs confidence threshold. I even explored the effect of confidence threshold on hard negative mining and hence average precision. Although I did observe variability in the average precision, I could not deduce any meaningful information for the relationship between average precision and confidence threshold. </p>
+<figure>
+<img src="precisionvsconfthres_hardnegs.png" width=60%>
+</figure>	
 </li>
+
+<li><span lang="latex">\textbf{\underline{Effect of sliding window step size for detection}:-}</li>
+<p>For this experiment, I followed similar procedures as above experiments of (i) maintaining constant positive and negative training features throughtout the experiment, (ii) best values of $C=2e^{-2}$, $topk=250$, confidence threshold = $-1.0$ and (iii) same scale factors for multi-scale detection i.e. [1.0, 0.9, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25]. The step size for sliding windows for detection on test images was varied across the following values:- [5, 10, 20, 30] and corresponding values of average precision was recorded. Below is a plot from the experiment:</p>
+		<figure>
+		  <img src="precisionvsstepsize.png" width=48%>
+		  <img src="precisionvsstepsizetime.png" width=48%>
+		</figure>
+<p>Discussion:</p>
 
 </ol>
 

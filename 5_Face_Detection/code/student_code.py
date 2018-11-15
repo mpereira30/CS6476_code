@@ -17,7 +17,7 @@ detection_scales = [1.0, 0.9, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0
 
 return_all 			= False
 step_size 			= 15
-detect_step_size 	= 10
+detect_step_size 	= 30
 pos_ws				= 1.0
 topk_value			= 250
 
@@ -473,8 +473,8 @@ class NN_classifier:
 				self.L1_B = tf.get_variable(name="l1_b", shape=[fnn_layer_size], dtype=tf.float32,	initializer=tf.zeros_initializer())
 				self.L2_W = tf.get_variable(name="l2_w", shape=[fnn_layer_size, fnn_layer_size], dtype=tf.float32, initializer=tf.random_normal_initializer())
 				self.L2_B = tf.get_variable(name="l2_b", shape=[fnn_layer_size], dtype=tf.float32, initializer=tf.zeros_initializer())
-				self.L3_W = tf.get_variable(name="l3_w", shape=[fnn_layer_size, fnn_layer_size], dtype=tf.float32, initializer=tf.random_normal_initializer())
-				self.L3_B = tf.get_variable(name="l3_b", shape=[fnn_layer_size], dtype=tf.float32, initializer=tf.zeros_initializer())				
+				# self.L3_W = tf.get_variable(name="l3_w", shape=[fnn_layer_size, fnn_layer_size], dtype=tf.float32, initializer=tf.random_normal_initializer())
+				# self.L3_B = tf.get_variable(name="l3_b", shape=[fnn_layer_size], dtype=tf.float32, initializer=tf.zeros_initializer())				
 				self.O_W = tf.get_variable(name="o_w", shape=[fnn_layer_size, 1], dtype=tf.float32, initializer=tf.random_normal_initializer())
 				self.O_B = tf.get_variable(name="o_b", shape=[1], dtype=tf.float32, initializer=tf.zeros_initializer())
 
@@ -482,10 +482,10 @@ class NN_classifier:
 					
 					l1 = tf.nn.relu(tf.matmul(input_feature, self.L1_W) + self.L1_B)
 					l2 = tf.nn.relu(tf.matmul(l1, self.L2_W) + self.L2_B)
-					# output = tf.tanh(tf.matmul(l2, self.O_W) + self.O_B)
+					output = tf.tanh(tf.matmul(l2, self.O_W) + self.O_B)
 
-					l3 = tf.nn.relu(tf.matmul(l2, self.L3_W) + self.L3_B)
-					output = tf.tanh(tf.matmul(l3, self.O_W) + self.O_B)
+					# l3 = tf.nn.relu(tf.matmul(l2, self.L3_W) + self.L3_B)
+					# output = tf.tanh(tf.matmul(l3, self.O_W) + self.O_B)
 					
 					return output
 
