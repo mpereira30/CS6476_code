@@ -54,8 +54,6 @@ def create_datasets(data_path, input_size, rgb=False):
 
   """ TRAIN DATA TRANSFORMS """
   train_data_tforms = []
-  train_data_tforms.append(transforms.Resize(size=max(input_size)))
-  train_data_tforms.append(transforms.CenterCrop(size=input_size))
   if not rgb:
     train_data_tforms.append(transforms.Grayscale())
 
@@ -64,7 +62,15 @@ def create_datasets(data_path, input_size, rgb=False):
   #######################################################################
   # TODO Add a transformation to you train_data_tforms that left-right mirrors
   # the image randomly. Which transonformation should you add?
-  pass
+  
+  print("using list of random crop, random horizontal flip and random rotation separately 50% prob each")
+  train_data_tforms.append(transforms.RandomApply([transforms.RandomCrop(size=input_size)], p=0.5))
+  train_data_tforms.append(transforms.RandomHorizontalFlip(p=0.5)) # p: probability of the image being flipped. Default value is 0.5
+  train_data_tforms.append(transforms.RandomApply([transforms.RandomRotation(degrees=25)], p=0.5))
+
+  # Perform original transforms:
+  train_data_tforms.append(transforms.Resize(size=max(input_size)))
+  train_data_tforms.append(transforms.CenterCrop(size=input_size))
 
   # Do not move the position of the below line (leave it between the left-right
   # mirroring and normalization tranformations.
@@ -74,7 +80,7 @@ def create_datasets(data_path, input_size, rgb=False):
   # tensor by subtracting mean and dividing by std. You may use train_mean,
   # test_mean, train_std, or test_std values that are already calculated for
   # you. Which mean and std should you use to normalize the data?
-  pass
+  train_data_tforms.append(transforms.Normalize(mean=train_mean, std=train_std))
 
   #######################################################################
   #                          END OF YOUR CODE                           #
@@ -97,7 +103,12 @@ def create_datasets(data_path, input_size, rgb=False):
   # tensor by subtracting mean and dividing by std. You may use train_mean,
   # test_mean, train_std, or test_std values that are already calculated for
   # you. Which mean and std should you use to normalize the data?
-  pass
+ 
+  # Normalize using mean and std from TEST data: 
+  # test_data_tforms.append(transforms.Normalize(mean=test_mean, std=test_std))
+
+  # Normalize using mean and std from TRAIN data:
+  test_data_tforms.append(transforms.Normalize(mean=train_mean, std=train_std))
 
   #######################################################################
   #                          END OF YOUR CODE                           #
@@ -157,15 +168,66 @@ class SimpleNet(nn.Module):
     # 3) add one batch normalization layer after each convolution/linear layer
     #    except the last convolution/linear layer of the WHOLE model (meaning
     #    including the classifier).
+
+
+    # filter_nums = [10, 15] # DNN 1
+    filter_nums = [10, 15, 25] # DNN 2
+ 
     self.features = nn.Sequential(
-      nn.Conv2d(in_channels=in_channels, out_channels=10, kernel_size=9,
+      # shallow network:
+      # nn.Conv2d(in_channels=in_channels, out_channels=10, kernel_size=9,
+      #   stride=1, padding=0, bias=False),
+      # nn.MaxPool2d(kernel_size=7, stride=7, padding=0),
+      # nn.ReLU(),
+
+      #------------------------------- DNN 1 -------------------------------------------
+      # nn.Conv2d(in_channels=in_channels, out_channels=filter_nums[0], kernel_size=9,
+      #   stride=1, padding=0, bias=False),
+      # nn.BatchNorm2d(filter_nums[0]),
+      # nn.MaxPool2d(kernel_size=4, stride=2, padding=0),
+      # nn.ReLU(),
+      
+      # nn.Conv2d(in_channels=filter_nums[0], out_channels=filter_nums[1], kernel_size=5,
+      #   stride=1, padding=0, bias=False),
+      # nn.BatchNorm2d(filter_nums[1]),
+      # nn.MaxPool2d(kernel_size=3, stride=2, padding=0),
+      # nn.ReLU(),
+
+      #------------------------------- DNN 2 -------------------------------------------
+      nn.Conv2d(in_channels=in_channels, out_channels=filter_nums[0], kernel_size=9,
         stride=1, padding=0, bias=False),
-      nn.MaxPool2d(kernel_size=7, stride=7, padding=0),
+      nn.BatchNorm2d(filter_nums[0]),
+      nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
       nn.ReLU(),
+      
+      nn.Conv2d(in_channels=filter_nums[0], out_channels=filter_nums[1], kernel_size=5,
+        stride=1, padding=0, bias=False),
+      nn.BatchNorm2d(filter_nums[1]),
+      nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
+      nn.ReLU(),
+
+      nn.Conv2d(in_channels=filter_nums[1], out_channels=filter_nums[2], kernel_size=3,
+        stride=1, padding=0, bias=False),
+      nn.BatchNorm2d(filter_nums[2]),
+      nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
+      nn.ReLU(),
+
+      nn.Dropout(p=0.5), # Added dropout layer
     )
 
-    self.classifier = nn.Conv2d(in_channels=10, out_channels=num_classes,
-      kernel_size=8, stride=1, padding=0)
+    # Shallow network:
+    # self.classifier = nn.Conv2d(in_channels=10, out_channels=num_classes,
+    #   kernel_size=8, stride=1, padding=0)
+
+    # DNN 1
+    # self.classifier = nn.Conv2d(in_channels=filter_nums[-1], out_channels=num_classes,
+    #   kernel_size=11, stride=1, padding=0)
+
+    # DNN 2
+    self.classifier = nn.Conv2d(in_channels=filter_nums[-1], out_channels=num_classes,
+      kernel_size=5, stride=1, padding=0)
+
+
     #####################################################################
     #                         END OF YOUR CODE                          #
     #####################################################################
