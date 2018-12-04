@@ -63,8 +63,10 @@ def create_datasets(data_path, input_size, rgb=False):
   # TODO Add a transformation to you train_data_tforms that left-right mirrors
   # the image randomly. Which transonformation should you add?
   
-  print("using list of random crop, random horizontal flip and random rotation separately 50% prob each")
-  train_data_tforms.append(transforms.RandomApply([transforms.RandomCrop(size=input_size)], p=0.5))
+  print("using list of random crop, random horizontal flip and random rotation separately 25%, 50%, 50% prob each")
+  train_data_tforms.append(transforms.RandomApply([transforms.RandomCrop(size=input_size)], p=0.25))
+
+  # print("using list of NO andom crop, random horizontal flip and random rotation separately 50% prob each")  
   train_data_tforms.append(transforms.RandomHorizontalFlip(p=0.5)) # p: probability of the image being flipped. Default value is 0.5
   train_data_tforms.append(transforms.RandomApply([transforms.RandomRotation(degrees=25)], p=0.5))
 
@@ -170,9 +172,10 @@ class SimpleNet(nn.Module):
     #    including the classifier).
 
 
-    # filter_nums = [10, 15] # DNN 1
-    filter_nums = [10, 15, 25] # DNN 2
- 
+    # filter_nums = [15, 25] # DNN 1
+    # filter_nums = [10, 15, 25] # DNN 2
+    filter_nums = [10, 10, 15, 15] # DNN 3
+
     self.features = nn.Sequential(
       # shallow network:
       # nn.Conv2d(in_channels=in_channels, out_channels=10, kernel_size=9,
@@ -180,7 +183,7 @@ class SimpleNet(nn.Module):
       # nn.MaxPool2d(kernel_size=7, stride=7, padding=0),
       # nn.ReLU(),
 
-      #------------------------------- DNN 1 -------------------------------------------
+      # ------------------------------- DNN 1 -------------------------------------------
       # nn.Conv2d(in_channels=in_channels, out_channels=filter_nums[0], kernel_size=9,
       #   stride=1, padding=0, bias=False),
       # nn.BatchNorm2d(filter_nums[0]),
@@ -193,24 +196,78 @@ class SimpleNet(nn.Module):
       # nn.MaxPool2d(kernel_size=3, stride=2, padding=0),
       # nn.ReLU(),
 
+      # ------------------------------- DNN 1 mod -------------------------------------------
+      # nn.Conv2d(in_channels=in_channels, out_channels=filter_nums[0], kernel_size=9,
+      #   stride=1, padding=0, bias=False),
+      # nn.ReLU(),  
+      # nn.BatchNorm2d(filter_nums[0]),
+      # nn.MaxPool2d(kernel_size=4, stride=2, padding=0),
+        
+      # nn.Conv2d(in_channels=filter_nums[0], out_channels=filter_nums[1], kernel_size=5,
+      #   stride=1, padding=0, bias=False),
+      # nn.ReLU(),
+      # nn.BatchNorm2d(filter_nums[1]),
+      # nn.MaxPool2d(kernel_size=3, stride=2, padding=0),
+
       #------------------------------- DNN 2 -------------------------------------------
-      nn.Conv2d(in_channels=in_channels, out_channels=filter_nums[0], kernel_size=9,
-        stride=1, padding=0, bias=False),
-      nn.BatchNorm2d(filter_nums[0]),
-      nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
-      nn.ReLU(),
+      # nn.Conv2d(in_channels=in_channels, out_channels=filter_nums[0], kernel_size=9,
+      #   stride=1, padding=0, bias=False),
+      # nn.BatchNorm2d(filter_nums[0]),
+      # nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
+      # nn.ReLU(),
       
+      # nn.Conv2d(in_channels=filter_nums[0], out_channels=filter_nums[1], kernel_size=5,
+      #   stride=1, padding=0, bias=False),
+      # nn.BatchNorm2d(filter_nums[1]),
+      # nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
+      # nn.ReLU(),
+
+      # nn.Conv2d(in_channels=filter_nums[1], out_channels=filter_nums[2], kernel_size=3,
+      #   stride=1, padding=0, bias=False),
+      # nn.BatchNorm2d(filter_nums[2]),
+      # nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
+      # nn.ReLU(),
+
+
+      #------------------------------- DNN 2 mod-------------------------------------------
+      # nn.Conv2d(in_channels=in_channels, out_channels=filter_nums[0], kernel_size=9,
+      #   stride=1, padding=0, bias=False),
+      # nn.ReLU(),
+      # nn.BatchNorm2d(filter_nums[0]),
+      # nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
+      
+      # nn.Conv2d(in_channels=filter_nums[0], out_channels=filter_nums[1], kernel_size=5,
+      #   stride=1, padding=0, bias=False),
+      # nn.ReLU(),
+      # nn.BatchNorm2d(filter_nums[1]),
+      # nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
+
+      # nn.Conv2d(in_channels=filter_nums[1], out_channels=filter_nums[2], kernel_size=3,
+      #   stride=1, padding=0, bias=False),
+      # nn.ReLU(),
+      # nn.BatchNorm2d(filter_nums[2]),
+      # nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
+
+      #------------------------------- DNN 3 -------------------------------------------
+      nn.Conv2d(in_channels=in_channels, out_channels=filter_nums[0], kernel_size=5,
+        stride=1, padding=0, bias=False),
+      nn.ReLU(),
+      nn.BatchNorm2d(filter_nums[0]),
       nn.Conv2d(in_channels=filter_nums[0], out_channels=filter_nums[1], kernel_size=5,
         stride=1, padding=0, bias=False),
-      nn.BatchNorm2d(filter_nums[1]),
+      nn.ReLU(),      
+      nn.BatchNorm2d(filter_nums[1]),      
       nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
-      nn.ReLU(),
-
+      
       nn.Conv2d(in_channels=filter_nums[1], out_channels=filter_nums[2], kernel_size=3,
         stride=1, padding=0, bias=False),
+      nn.ReLU(),      
       nn.BatchNorm2d(filter_nums[2]),
+      nn.Conv2d(in_channels=filter_nums[2], out_channels=filter_nums[3], kernel_size=3,
+        stride=1, padding=0, bias=False),      
+      nn.ReLU(),      
+      nn.BatchNorm2d(filter_nums[3]),
       nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
-      nn.ReLU(),
 
       nn.Dropout(p=0.5), # Added dropout layer
     )
@@ -224,14 +281,16 @@ class SimpleNet(nn.Module):
     #   kernel_size=11, stride=1, padding=0)
 
     # DNN 2
-    self.classifier = nn.Conv2d(in_channels=filter_nums[-1], out_channels=num_classes,
-      kernel_size=5, stride=1, padding=0)
+    # self.classifier = nn.Conv2d(in_channels=filter_nums[-1], out_channels=num_classes,
+    #   kernel_size=5, stride=1, padding=0)
 
+    # DNN 3
+    self.classifier = nn.Conv2d(in_channels=filter_nums[-1], out_channels=num_classes,
+      kernel_size=12, stride=1, padding=0)
 
     #####################################################################
     #                         END OF YOUR CODE                          #
     #####################################################################
-
 
     """ NETWORK INITIALIZATION """
     for name, m in self.named_modules():
@@ -247,9 +306,11 @@ class SimpleNet(nn.Module):
         #################################################################
         #                     TODO: YOUR CODE HERE                      #
         #################################################################
-        # TODO How should you initialize the weights and biases for BatchNorm?
-        # Initialize them here.
-        pass
+        nn.init.constant_(m.weight.data, 1)
+        if m.bias is not None:
+          # Initializing biases with zeros.
+          nn.init.constant_(m.bias.data, 0)
+          # print("with proper Initializing batch norm")
 
         #################################################################
         #                       END OF YOUR CODE                        #
