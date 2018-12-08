@@ -54,6 +54,8 @@ def create_datasets(data_path, input_size, rgb=False):
 
   """ TRAIN DATA TRANSFORMS """
   train_data_tforms = []
+  train_data_tforms.append(transforms.Resize(size=max(input_size)))
+  train_data_tforms.append(transforms.CenterCrop(size=input_size))  
   if not rgb:
     train_data_tforms.append(transforms.Grayscale())
 
@@ -63,16 +65,16 @@ def create_datasets(data_path, input_size, rgb=False):
   # TODO Add a transformation to you train_data_tforms that left-right mirrors
   # the image randomly. Which transonformation should you add?
   
-  print("using list of random crop, random horizontal flip and random rotation separately 25%, 50%, 50% prob each")
-  train_data_tforms.append(transforms.RandomApply([transforms.RandomCrop(size=input_size)], p=0.25))
+  # print("using list of random crop, random horizontal flip and random rotation separately 25%, 50%, 50% prob each")
+  # train_data_tforms.append(transforms.RandomApply([transforms.RandomCrop(size=input_size)], p=0.25))
 
-  # print("using list of NO andom crop, random horizontal flip and random rotation separately 50% prob each")  
+  print("using list of NO random crop, random horizontal flip and random rotation separately 50% prob each")  
   train_data_tforms.append(transforms.RandomHorizontalFlip(p=0.5)) # p: probability of the image being flipped. Default value is 0.5
   train_data_tforms.append(transforms.RandomApply([transforms.RandomRotation(degrees=25)], p=0.5))
 
   # Perform original transforms:
-  train_data_tforms.append(transforms.Resize(size=max(input_size)))
-  train_data_tforms.append(transforms.CenterCrop(size=input_size))
+  # train_data_tforms.append(transforms.Resize(size=max(input_size)))
+  # train_data_tforms.append(transforms.CenterCrop(size=input_size))
 
   # Do not move the position of the below line (leave it between the left-right
   # mirroring and normalization tranformations.
@@ -367,7 +369,18 @@ def create_part2_model(model, num_classes):
   # 2) Initialize the weights and the bias in the new linear layer. Look at how
   #    is the linear layer initialized in SimpleNetPart1.
   # 3) Append your new layer to your new_classifier.
-  pass
+  
+  # Create a new last layer based on number of classes:
+  last_layer = nn.Linear(4096, num_classes)
+  
+  # Initialize the data members of the linear layer object:
+  last_layer.weight.data.normal_(0, 1)
+  last_layer.weight.data.mul_(1e-2)
+  if last_layer.bias is not None:
+  	nn.init.constant_(last_layer.bias.data, 0)  
+
+  # Append the last layer to the network:
+  new_classifier.append(last_layer)
 
   #######################################################################
   #                          END OF YOUR CODE                           #
